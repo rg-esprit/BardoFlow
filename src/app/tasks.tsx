@@ -559,7 +559,7 @@ export default function TasksScreen() {
       {/* Floating Action Button */}
       <FloatingActionButton
         onPress={() => setQuickAddVisible(true)}
-        bottomOffset={20}
+        bottomOffset={96}
       />
 
       {/* Modals */}

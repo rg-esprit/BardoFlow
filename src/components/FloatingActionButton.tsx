@@ -20,7 +20,7 @@ interface FloatingActionButtonProps {
 export function FloatingActionButton({
   onPress,
   style,
-  bottomOffset = 24,
+  bottomOffset = 96,
 }: FloatingActionButtonProps) {
   const handlePress = () => {
     if (Platform.OS !== 'web') {

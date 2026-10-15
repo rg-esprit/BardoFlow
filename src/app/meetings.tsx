@@ -348,7 +348,7 @@ export default function MeetingsScreen() {
       {/* Floating Action Button */}
       <FloatingActionButton
         onPress={() => setModalVisible(true)}
-        bottomOffset={20}
+        bottomOffset={96}
       />
 
       {/* Schedule Meeting Modal */}

@@ -506,7 +506,7 @@ export default function TodayDashboardScreen() {
       {/* Floating Action Button for rapid task creation */}
       <FloatingActionButton
         onPress={() => setQuickAddModalVisible(true)}
-        bottomOffset={20}
+        bottomOffset={96}
       />
 
       {/* Modals */}

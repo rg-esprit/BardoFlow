@@ -39,3 +39,16 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## Database & Supabase (Self-Hosted)
+
+- **Schema Isolation**: You are strictly working in the `bardoflow` schema. All tables, functions, and migrations MUST be schema-qualified (e.g. `CREATE TABLE bardoflow.todos (...)`). Never alter, read, or drop tables in `public` or other schemas.
+- **Supabase MCP**: Use the Supabase MCP tools (`apply_migration`, `execute_sql`, `list_tables`) with schema `bardoflow`. Always specify `schemas: ["bardoflow"]` when inspecting or listing tables.
+- **Client Setup**: In application code using `@supabase/supabase-js`, always initialize with the schema option:
+  ```ts
+  createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    db: { schema: 'bardoflow' },
+  });
+  ```
+- **Storage**: Any project storage buckets must be prefixed with `bardoflow-` (e.g. `bardoflow-uploads`).
+

@@ -7,6 +7,8 @@ import {
   useColorScheme,
   StyleProp,
   ViewStyle,
+  Vibration,
+  Platform,
 } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { Task } from '@/types/database';
@@ -37,7 +39,7 @@ export function TaskCard({
 
   const isCompleted = task.status === 'completed';
 
-  // Format deadline and check overdue status
+  // Format deadline with time-precision
   const deadlineInfo = React.useMemo(() => {
     if (!task.deadline) return null;
 
@@ -46,24 +48,36 @@ export function TaskCard({
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dueDate = new Date(due.getFullYear(), due.getMonth(), due.getDate());
 
+    const diffMs = due.getTime() - now.getTime();
+    const diffHours = Math.round(diffMs / (1000 * 60 * 60));
     const diffDays = Math.round(
       (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
     );
+
+    const hasTime =
+      due.getHours() !== 0 || due.getMinutes() !== 0 || due.getSeconds() !== 0;
+    const timeStr = hasTime
+      ? due.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+      : '';
 
     let text = '';
     let isOverdue = false;
     let isUrgent = false;
 
-    if (diffDays < 0) {
+    if (diffMs < 0) {
       isOverdue = true;
-      text = `${Math.abs(diffDays)}d overdue`;
+      if (Math.abs(diffHours) < 24) {
+        text = `Overdue by ${Math.abs(diffHours)}h`;
+      } else {
+        text = `Overdue by ${Math.abs(diffDays)}d`;
+      }
     } else if (diffDays === 0) {
       isUrgent = true;
-      text = 'Today';
+      text = hasTime ? `Today, ${timeStr}` : 'Today';
     } else if (diffDays === 1) {
-      text = 'Tomorrow';
+      text = hasTime ? `Tomorrow, ${timeStr}` : 'Tomorrow';
     } else if (diffDays <= 7) {
-      text = `In ${diffDays} days`;
+      text = hasTime ? `In ${diffDays}d (${timeStr})` : `In ${diffDays} days`;
     } else {
       text = due.toLocaleDateString(undefined, {
         month: 'short',
@@ -82,36 +96,76 @@ export function TaskCard({
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }, [task.assignee_name]);
 
+  const handleToggle = () => {
+    if (Platform.OS !== 'web') {
+      try {
+        Vibration.vibrate(15);
+      } catch {}
+    }
+    onToggleComplete?.(task);
+  };
+
+  const priorityColor = React.useMemo(() => {
+    switch (task.priority) {
+      case 'urgent':
+        return colors.urgent;
+      case 'high':
+        return colors.warning;
+      case 'medium':
+        return colors.primary;
+      default:
+        return colors.success;
+    }
+  }, [task.priority, colors]);
+
   return (
     <Pressable
       onPress={() => onPress?.(task)}
+      onLongPress={() => onDelete?.(task)}
       style={({ pressed }) => [
         styles.card,
         {
           backgroundColor: colors.card,
-          borderColor: isCompleted
-            ? colors.borderSubtle
-            : colors.border,
-          opacity: isCompleted ? 0.72 : pressed ? 0.95 : 1,
+          borderColor: isCompleted ? colors.borderSubtle : colors.border,
+          opacity: isCompleted ? 0.65 : pressed ? 0.94 : 1,
         },
         style,
       ]}>
+      {/* Priority accent stripe */}
+      <View
+        style={[
+          styles.priorityAccent,
+          {
+            backgroundColor: isCompleted ? 'transparent' : priorityColor,
+          },
+        ]}
+      />
+
       <View style={styles.contentRow}>
-        {/* Toggle completion button */}
+        {/* Things 3 style circular toggle button */}
         <Pressable
           hitSlop={12}
-          onPress={() => onToggleComplete?.(task)}
-          style={[
+          onPress={handleToggle}
+          style={({ pressed }) => [
             styles.checkbox,
             {
-              borderColor: isCompleted ? colors.primary : colors.textSecondary,
-              backgroundColor: isCompleted ? colors.primary : 'transparent',
+              borderColor: isCompleted
+                ? colors.success
+                : task.priority === 'urgent'
+                ? colors.urgent
+                : colors.border,
+              backgroundColor: isCompleted
+                ? colors.success
+                : isDark
+                ? '#1E293B'
+                : '#F8FAFC',
+              opacity: pressed ? 0.7 : 1,
             },
           ]}>
           {isCompleted && (
             <SymbolView
               name={{ ios: 'checkmark', android: 'check', web: 'check' }}
-              size={13}
+              size={12}
               tintColor="#FFFFFF"
             />
           )}
@@ -119,7 +173,7 @@ export function TaskCard({
 
         {/* Task Details */}
         <View style={styles.body}>
-          {/* Badges row */}
+          {/* Top meta row */}
           <View style={styles.badgesRow}>
             <DepartmentBadge department={task.department} size="sm" />
             <PriorityBadge priority={task.priority} size="sm" />
@@ -130,10 +184,16 @@ export function TaskCard({
                 <Pressable
                   hitSlop={8}
                   onPress={() => onEdit(task)}
-                  style={styles.actionBtn}>
+                  style={({ pressed }) => [
+                    styles.actionBtn,
+                    {
+                      backgroundColor: isDark ? '#1E293B' : colors.backgroundElement,
+                      opacity: pressed ? 0.6 : 1,
+                    },
+                  ]}>
                   <SymbolView
                     name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
-                    size={14}
+                    size={13}
                     tintColor={colors.textSecondary}
                   />
                 </Pressable>
@@ -142,10 +202,16 @@ export function TaskCard({
                 <Pressable
                   hitSlop={8}
                   onPress={() => onDelete(task)}
-                  style={styles.actionBtn}>
+                  style={({ pressed }) => [
+                    styles.actionBtn,
+                    {
+                      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2',
+                      opacity: pressed ? 0.6 : 1,
+                    },
+                  ]}>
                   <SymbolView
                     name={{ ios: 'trash', android: 'delete', web: 'delete' }}
-                    size={14}
+                    size={13}
                     tintColor={colors.danger}
                   />
                 </Pressable>
@@ -184,19 +250,25 @@ export function TaskCard({
                   {
                     backgroundColor:
                       deadlineInfo.isOverdue && !isCompleted
-                        ? colors.dangerLight
+                        ? isDark
+                          ? 'rgba(239, 68, 68, 0.2)'
+                          : colors.dangerLight
                         : deadlineInfo.isUrgent && !isCompleted
-                        ? colors.warningLight
+                        ? isDark
+                          ? 'rgba(245, 158, 11, 0.2)'
+                          : colors.warningLight
+                        : isDark
+                        ? '#1E293B'
                         : colors.backgroundElement,
                   },
                 ]}>
                 <SymbolView
                   name={{
-                    ios: 'calendar',
-                    android: 'calendar_today',
-                    web: 'calendar_today',
+                    ios: 'clock.fill',
+                    android: 'schedule',
+                    web: 'schedule',
                   }}
-                  size={12}
+                  size={11}
                   tintColor={
                     deadlineInfo.isOverdue && !isCompleted
                       ? colors.danger
@@ -228,15 +300,11 @@ export function TaskCard({
                   style={[
                     styles.avatar,
                     {
-                      backgroundColor: colors.primaryLight,
+                      backgroundColor: isDark ? 'rgba(3, 126, 243, 0.25)' : colors.primaryLight,
                       borderColor: colors.primary,
                     },
                   ]}>
-                  <Text
-                    style={[
-                      styles.avatarText,
-                      { color: colors.primary },
-                    ]}>
+                  <Text style={[styles.avatarText, { color: colors.primary }]}>
                     {initials}
                   </Text>
                 </View>
@@ -257,23 +325,33 @@ export function TaskCard({
 const styles = StyleSheet.create({
   card: {
     padding: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     marginBottom: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1.5 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1.5,
+    shadowRadius: 8,
+    elevation: 2,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  priorityAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3.5,
   },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    paddingLeft: 4,
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -292,18 +370,22 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     marginLeft: 'auto',
   },
   actionBtn: {
-    padding: 4,
-    borderRadius: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontSize: 15,
     fontWeight: '700',
-    lineHeight: 20,
+    lineHeight: 21,
     marginBottom: 4,
+    letterSpacing: -0.2,
   },
   description: {
     fontSize: 13,
@@ -322,13 +404,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: 8,
     gap: 4,
   },
   deadlineText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   assigneeContainer: {
     flexDirection: 'row',
@@ -351,6 +433,6 @@ const styles = StyleSheet.create({
   assigneeName: {
     fontSize: 12,
     fontWeight: '500',
-    maxWidth: 110,
+    maxWidth: 120,
   },
 });

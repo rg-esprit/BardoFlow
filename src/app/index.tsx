@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,6 +9,9 @@ import {
   ActivityIndicator,
   useColorScheme,
   Alert,
+  TextInput,
+  Vibration,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
@@ -17,15 +20,19 @@ import {
   getTasks,
   toggleTaskComplete,
   deleteTask,
+  createTask,
 } from '@/services/task-service';
-import { getMeetings } from '@/services/meeting-service';
+import { getMeetings, deleteMeeting } from '@/services/meeting-service';
 import { getActivities } from '@/services/activity-service';
 import { Colors } from '@/constants/theme';
-import { StatCard } from '@/components/StatCard';
+import { WeekStrip, isSameDay } from '@/components/WeekStrip';
+import { DailyFocusHeader } from '@/components/DailyFocusHeader';
 import { TaskCard } from '@/components/TaskCard';
 import { MeetingCard } from '@/components/MeetingCard';
-import { CreateTaskModal } from '@/components/CreateTaskModal';
+import { QuickAddModal } from '@/components/QuickAddModal';
 import { CreateMeetingModal } from '@/components/CreateMeetingModal';
+import { EditTaskModal } from '@/components/EditTaskModal';
+import { FloatingActionButton } from '@/components/FloatingActionButton';
 
 export default function TodayDashboardScreen() {
   const scheme = useColorScheme();
@@ -38,9 +45,17 @@ export default function TodayDashboardScreen() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
 
+  // Selected date for WeekStrip (defaults to today)
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // Inline quick task add input
+  const [inlineTaskTitle, setInlineTaskTitle] = useState('');
+  const [isInlineAdding, setIsInlineAdding] = useState(false);
+
   // Modals
-  const [taskModalVisible, setTaskModalVisible] = useState(false);
+  const [quickAddModalVisible, setQuickAddModalVisible] = useState(false);
   const [meetingModalVisible, setMeetingModalVisible] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -48,7 +63,7 @@ export default function TodayDashboardScreen() {
         await Promise.all([
           getTasks(),
           getMeetings(),
-          getActivities({ limit: 8 }),
+          getActivities({ limit: 10 }),
         ]);
 
       setTasks(fetchedTasks);
@@ -73,15 +88,13 @@ export default function TodayDashboardScreen() {
 
   const handleToggleTask = async (task: Task) => {
     try {
-      // Optimistic update
       const updatedStatus = task.status === 'completed' ? 'pending' : 'completed';
       setTasks((prev) =>
         prev.map((t) => (t.id === task.id ? { ...t, status: updatedStatus } : t))
       );
 
       await toggleTaskComplete(task.id, task.status);
-      // Refresh activities in background
-      getActivities({ limit: 8 }).then(setActivities).catch(() => {});
+      getActivities({ limit: 10 }).then(setActivities).catch(() => {});
     } catch (err) {
       console.error('[Dashboard] Toggle task error:', err);
       loadData();
@@ -100,72 +113,168 @@ export default function TodayDashboardScreen() {
           onPress: async () => {
             setTasks((prev) => prev.filter((t) => t.id !== task.id));
             await deleteTask(task.id);
-            getActivities({ limit: 8 }).then(setActivities).catch(() => {});
+            getActivities({ limit: 10 }).then(setActivities).catch(() => {});
           },
         },
       ]
     );
   };
 
-  // Metrics calculations
-  const pendingTasks = tasks.filter((t) => t.status !== 'completed');
-  const urgentTasks = tasks.filter(
-    (t) => t.status !== 'completed' && (t.priority === 'urgent' || t.priority === 'high')
-  );
-
-  // Focus tasks: urgent, or due today/overdue
-  const now = new Date();
-  const todayStr = now.toDateString();
-
-  const urgentOrTodayTasks = pendingTasks.filter((t) => {
-    if (t.priority === 'urgent') return true;
-    if (t.deadline) {
-      const d = new Date(t.deadline);
-      return d.toDateString() === todayStr || d.getTime() < now.getTime();
-    }
-    return false;
-  });
-
-  const completedCount = tasks.filter((t) => t.status === 'completed').length;
-  const totalTasks = tasks.length;
-  const completionRate =
-    totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
-
-  // Next upcoming meeting
-  const upcomingMeetings = meetings.filter(
-    (m) => new Date(m.meeting_date).getTime() >= now.getTime() - 1000 * 60 * 30
-  );
-  const nextMeeting = upcomingMeetings[0] || null;
-
-  // Format today's date
-  const formattedToday = now.toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  });
-
-  // Relative time helper for activity
-  const formatTimeAgo = (isoDate: string) => {
-    const diff = Date.now() - new Date(isoDate).getTime();
-    const minutes = Math.floor(diff / (1000 * 60));
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
+  const handleDeleteMeeting = (meeting: Meeting) => {
+    Alert.alert(
+      'Cancel Meeting',
+      `Are you sure you want to delete "${meeting.title}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setMeetings((prev) => prev.filter((m) => m.id !== meeting.id));
+            await deleteMeeting(meeting.id);
+            getActivities({ limit: 10 }).then(setActivities).catch(() => {});
+          },
+        },
+      ]
+    );
   };
+
+  // Inline Quick Add submit
+  const handleInlineAdd = async () => {
+    const trimmed = inlineTaskTitle.trim();
+    if (!trimmed) return;
+
+    if (Platform.OS !== 'web') {
+      try {
+        Vibration.vibrate(15);
+      } catch {}
+    }
+
+    try {
+      setIsInlineAdding(true);
+      const deadline = new Date(selectedDate);
+      deadline.setHours(20, 0, 0, 0);
+
+      const newTask = await createTask({
+        title: trimmed,
+        department: 'General',
+        priority: 'medium',
+        deadline: deadline.toISOString(),
+        status: 'pending',
+      });
+
+      setInlineTaskTitle('');
+      setTasks((prev) => [newTask, ...prev]);
+      getActivities({ limit: 10 }).then(setActivities).catch(() => {});
+    } catch (err) {
+      console.error('[Dashboard] Inline add error:', err);
+      Alert.alert('Error', 'Could not create task. Please try again.');
+    } finally {
+      setIsInlineAdding(false);
+    }
+  };
+
+  const today = useMemo(() => new Date(), []);
+  const isViewingToday = useMemo(() => isSameDay(selectedDate, today), [selectedDate, today]);
+
+  // Daily focus metrics for today
+  const todayTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      if (!t.deadline) return false;
+      return isSameDay(new Date(t.deadline), today);
+    });
+  }, [tasks, today]);
+
+  const completedTodayCount = useMemo(() => {
+    return todayTasks.filter((t) => t.status === 'completed').length;
+  }, [todayTasks]);
+
+  const urgentTodayCount = useMemo(() => {
+    return todayTasks.filter(
+      (t) => t.status !== 'completed' && (t.priority === 'urgent' || t.priority === 'high')
+    ).length;
+  }, [todayTasks]);
+
+  // Spotlight Next Up Meeting (any meeting today or upcoming in the next 24h)
+  const spotlightMeeting = useMemo(() => {
+    const nowMs = Date.now();
+    // Prioritize meeting on selected date
+    const dayMeetings = meetings.filter((m) => {
+      if (!m.meeting_date) return false;
+      const mDate = new Date(m.meeting_date);
+      return isSameDay(mDate, selectedDate);
+    });
+
+    if (dayMeetings.length > 0) {
+      // Find one that is ongoing or upcoming
+      const upcoming = dayMeetings.find(
+        (m) => new Date(m.meeting_date).getTime() >= nowMs - 1000 * 60 * 60
+      );
+      if (upcoming) return upcoming;
+      return dayMeetings[0];
+    }
+
+    // Otherwise if viewing today, find the next upcoming meeting
+    if (isViewingToday) {
+      const upcoming = meetings.find(
+        (m) => new Date(m.meeting_date).getTime() >= nowMs - 1000 * 60 * 30
+      );
+      return upcoming || null;
+    }
+
+    return null;
+  }, [meetings, selectedDate, isViewingToday]);
+
+  // Agenda items for the selected day
+  const overdueTasks = useMemo(() => {
+    if (!isViewingToday) return [];
+    const nowTime = today.getTime();
+    return tasks.filter((t) => {
+      if (t.status === 'completed' || !t.deadline) return false;
+      const d = new Date(t.deadline);
+      return d.getTime() < nowTime && !isSameDay(d, today);
+    });
+  }, [tasks, isViewingToday, today]);
+
+  const selectedDayTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      if (!t.deadline) return false;
+      return isSameDay(new Date(t.deadline), selectedDate) && t.status !== 'completed';
+    });
+  }, [tasks, selectedDate]);
+
+  const selectedDayCompletedTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      if (!t.deadline) return false;
+      return isSameDay(new Date(t.deadline), selectedDate) && t.status === 'completed';
+    });
+  }, [tasks, selectedDate]);
+
+  const selectedDayMeetings = useMemo(() => {
+    return meetings.filter((m) => {
+      if (!m.meeting_date) return false;
+      return isSameDay(new Date(m.meeting_date), selectedDate);
+    });
+  }, [meetings, selectedDate]);
+
+  const selectedDayLabel = useMemo(() => {
+    if (isViewingToday) return 'Today';
+    const tomorrow = new Date();
+    tomorrow.setDate(today.getDate() + 1);
+    if (isSameDay(selectedDate, tomorrow)) return 'Tomorrow';
+    return selectedDate.toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+  }, [selectedDate, isViewingToday, today]);
 
   if (loading && !refreshing) {
     return (
-      <View
-        style={[
-          styles.centerContainer,
-          { backgroundColor: colors.background },
-        ]}>
+      <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-          Loading LC Bardo dashboard...
+          Loading BardoFlow...
         </Text>
       </View>
     );
@@ -186,349 +295,239 @@ export default function TodayDashboardScreen() {
             colors={[colors.primary]}
           />
         }>
-        {/* Header Greeting */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={styles.badgeRow}>
-              <View
-                style={[
-                  styles.lcBadge,
-                  { backgroundColor: colors.primaryLight },
-                ]}>
-                <Text style={[styles.lcBadgeText, { color: colors.primary }]}>
-                  LC BARDO
-                </Text>
-              </View>
-              <Text
-                style={[styles.dateSubtitle, { color: colors.textSecondary }]}>
-                {formattedToday}
-              </Text>
-            </View>
-            <Text style={[styles.greetingTitle, { color: colors.text }]}>
-              BardoFlow
-            </Text>
-            <Text
-              style={[styles.greetingSubtitle, { color: colors.textSecondary }]}>
-              Lead with passion, deliver with excellence.
-            </Text>
-          </View>
-        </View>
+        {/* Daily Focus Header with Time-Aware Greeting & Momentum Progress */}
+        <DailyFocusHeader
+          completedCount={completedTodayCount}
+          totalCount={todayTasks.length}
+          urgentCount={urgentTodayCount}
+          selectedDate={selectedDate}
+        />
 
-        {/* Quick Action Buttons */}
-        <View style={styles.quickActions}>
-          <Pressable
-            onPress={() => setTaskModalVisible(true)}
-            style={({ pressed }) => [
-              styles.actionButton,
-              {
-                backgroundColor: colors.primary,
-                opacity: pressed ? 0.9 : 1,
-              },
-            ]}>
-            <SymbolView
-              name={{ ios: 'plus.circle.fill', android: 'add', web: 'add' }}
-              size={18}
-              tintColor="#FFFFFF"
+        {/* Interactive 7-Day Week Strip */}
+        <WeekStrip
+          selectedDate={selectedDate}
+          onSelectDate={setSelectedDate}
+          tasks={tasks}
+          meetings={meetings}
+          onResetToday={() => setSelectedDate(new Date())}
+        />
+
+        {/* Next Up Meeting Spotlight Card (if any meeting today/selected date) */}
+        {spotlightMeeting && (
+          <View style={styles.sectionWrap}>
+            <MeetingCard
+              meeting={spotlightMeeting}
+              spotlight
+              onDelete={handleDeleteMeeting}
             />
-            <Text style={styles.actionButtonText}>+ New Task</Text>
-          </Pressable>
+          </View>
+        )}
 
-          <Pressable
-            onPress={() => setMeetingModalVisible(true)}
-            style={({ pressed }) => [
-              styles.actionButton,
+        {/* Inline Quick Task Bar */}
+        <View style={styles.sectionWrap}>
+          <View
+            style={[
+              styles.inlineAddBox,
               {
                 backgroundColor: colors.card,
                 borderColor: colors.border,
-                borderWidth: 1,
-                opacity: pressed ? 0.9 : 1,
               },
             ]}>
             <SymbolView
-              name={{
-                ios: 'calendar.badge.plus',
-                android: 'calendar_today',
-                web: 'calendar_today',
-              }}
+              name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
               size={18}
               tintColor={colors.primary}
             />
-            <Text
-              style={[styles.actionButtonText, { color: colors.text }]}>
-              + Schedule Meeting
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Metrics Summary Grid */}
-        <View style={styles.metricsGrid}>
-          <View style={styles.metricsCol}>
-            <StatCard
-              label="Pending Tasks"
-              value={pendingTasks.length}
-              subtext={`${completedCount} completed`}
-              iconName={{
-                ios: 'checklist',
-                android: 'checklist',
-                web: 'checklist',
-              }}
-              iconColor="#037EF3"
+            <TextInput
+              placeholder={`Quick add task for ${selectedDayLabel}...`}
+              placeholderTextColor={colors.textSecondary}
+              value={inlineTaskTitle}
+              onChangeText={setInlineTaskTitle}
+              onSubmitEditing={handleInlineAdd}
+              returnKeyType="done"
+              style={[styles.inlineInput, { color: colors.text }]}
             />
-          </View>
-          <View style={styles.metricsCol}>
-            <StatCard
-              label="Urgent Action"
-              value={urgentTasks.length}
-              subtext="Needs attention"
-              iconName={{
-                ios: 'flame.fill',
-                android: 'schedule',
-                web: 'schedule',
-              }}
-              iconColor="#EF4444"
-              iconBgColor={
-                isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2'
-              }
-              trend={{
-                text: `${completionRate}% Done`,
-                isPositive: completionRate >= 50,
-                isNeutral: completionRate < 50,
-              }}
-            />
+            {inlineTaskTitle.trim().length > 0 && (
+              <Pressable
+                onPress={handleInlineAdd}
+                disabled={isInlineAdding}
+                style={({ pressed }) => [
+                  styles.inlineAddBtn,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: pressed ? 0.8 : 1,
+                  },
+                ]}>
+                {isInlineAdding ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <SymbolView
+                    name={{ ios: 'arrow.up', android: 'arrow_upward', web: 'arrow_upward' }}
+                    size={12}
+                    tintColor="#FFFFFF"
+                  />
+                )}
+              </Pressable>
+            )}
           </View>
         </View>
 
-        {/* Next Meeting Spotlight */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Next Upcoming Meeting
+        {/* Selected Date Context Header */}
+        <View style={styles.agendaHeaderRow}>
+          <View style={styles.agendaTitleRow}>
+            <Text style={[styles.agendaTitle, { color: colors.text }]}>
+              {selectedDayLabel}'s Agenda
             </Text>
-            <Pressable onPress={() => setMeetingModalVisible(true)}>
-              <Text style={[styles.sectionAction, { color: colors.primary }]}>
-                + Schedule
-              </Text>
-            </Pressable>
-          </View>
-
-          {nextMeeting ? (
-            <MeetingCard meeting={nextMeeting} spotlight />
-          ) : (
             <View
               style={[
-                styles.emptySpotlight,
+                styles.countBadge,
                 {
-                  backgroundColor: colors.card,
+                  backgroundColor: isDark ? 'rgba(3, 126, 243, 0.2)' : colors.primaryLight,
+                },
+              ]}>
+              <Text style={[styles.countBadgeText, { color: colors.primary }]}>
+                {selectedDayTasks.length + selectedDayMeetings.length}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.actionShortcuts}>
+            <Pressable
+              hitSlop={8}
+              onPress={() => setMeetingModalVisible(true)}
+              style={({ pressed }) => [
+                styles.shortcutPill,
+                {
+                  backgroundColor: isDark ? '#1E293B' : colors.backgroundElement,
                   borderColor: colors.border,
+                  opacity: pressed ? 0.7 : 1,
                 },
               ]}>
               <SymbolView
-                name={{
-                  ios: 'calendar',
-                  android: 'calendar_today',
-                  web: 'calendar_today',
-                }}
-                size={28}
-                tintColor={colors.textSecondary}
+                name={{ ios: 'calendar.badge.plus', android: 'event', web: 'event' }}
+                size={12}
+                tintColor={colors.primary}
               />
-              <Text
-                style={[styles.emptySpotlightTitle, { color: colors.text }]}>
-                No upcoming meetings scheduled
-              </Text>
-              <Text
-                style={[
-                  styles.emptySpotlightDesc,
-                  { color: colors.textSecondary },
-                ]}>
-                Keep the momentum going by setting up your next sync.
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Urgent & Today's Deadlines Spotlight */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.titleWithCount}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Focus & Immediate Deadlines
-              </Text>
-              {urgentOrTodayTasks.length > 0 && (
-                <View
-                  style={[
-                    styles.countBadge,
-                    { backgroundColor: colors.dangerLight },
-                  ]}>
-                  <Text
-                    style={[styles.countBadgeText, { color: colors.danger }]}>
-                    {urgentOrTodayTasks.length}
-                  </Text>
-                </View>
-              )}
-            </View>
-            <Pressable onPress={() => setTaskModalVisible(true)}>
-              <Text style={[styles.sectionAction, { color: colors.primary }]}>
-                + Add Task
+              <Text style={[styles.shortcutText, { color: colors.textSecondary }]}>
+                + Meeting
               </Text>
             </Pressable>
           </View>
+        </View>
 
-          {urgentOrTodayTasks.length > 0 ? (
-            urgentOrTodayTasks.slice(0, 5).map((task) => (
+        {/* Overdue Items Banner (if viewing today & has overdue) */}
+        {overdueTasks.length > 0 && (
+          <View style={styles.sectionWrap}>
+            <View style={styles.groupHeader}>
+              <View style={styles.groupHeaderLeft}>
+                <View style={[styles.statusDot, { backgroundColor: colors.urgent }]} />
+                <Text style={[styles.groupTitle, { color: colors.urgent }]}>
+                  Overdue Action Items ({overdueTasks.length})
+                </Text>
+              </View>
+            </View>
+
+            {overdueTasks.map((task) => (
               <TaskCard
                 key={task.id}
                 task={task}
                 onToggleComplete={handleToggleTask}
                 onDelete={handleDeleteTask}
+                onEdit={setEditingTask}
               />
-            ))
-          ) : (
+            ))}
+          </View>
+        )}
+
+        {/* Pending Tasks for Selected Day */}
+        <View style={styles.sectionWrap}>
+          {selectedDayTasks.length === 0 && selectedDayMeetings.length === 0 && (
             <View
               style={[
-                styles.emptySpotlight,
+                styles.emptyDayCard,
                 {
                   backgroundColor: colors.card,
                   borderColor: colors.border,
                 },
               ]}>
               <SymbolView
-                name={{ ios: 'checkmark.circle.fill', android: 'check', web: 'check' }}
-                size={28}
-                tintColor={colors.success}
+                name={{ ios: 'checkmark.circle.fill', android: 'task_alt', web: 'task_alt' }}
+                size={34}
+                tintColor={colors.primary}
               />
-              <Text
-                style={[styles.emptySpotlightTitle, { color: colors.text }]}>
-                All caught up!
+              <Text style={[styles.emptyDayTitle, { color: colors.text }]}>
+                No pending items for {selectedDayLabel}
               </Text>
-              <Text
-                style={[
-                  styles.emptySpotlightDesc,
-                  { color: colors.textSecondary },
-                ]}>
-                No urgent tasks or deadlines due today. Great job!
+              <Text style={[styles.emptyDaySubtitle, { color: colors.textSecondary }]}>
+                Use the quick add bar above or tap + to plan ahead.
               </Text>
             </View>
           )}
+
+          {selectedDayTasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              onToggleComplete={handleToggleTask}
+              onDelete={handleDeleteTask}
+              onEdit={setEditingTask}
+            />
+          ))}
         </View>
 
-        {/* Recent LC Activity Feed */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Recent LC Activity
-            </Text>
+        {/* Completed Tasks section */}
+        {selectedDayCompletedTasks.length > 0 && (
+          <View style={styles.sectionWrap}>
+            <View style={styles.groupHeader}>
+              <View style={styles.groupHeaderLeft}>
+                <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
+                <Text style={[styles.groupTitle, { color: colors.textSecondary }]}>
+                  Completed ({selectedDayCompletedTasks.length})
+                </Text>
+              </View>
+            </View>
+
+            {selectedDayCompletedTasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                onToggleComplete={handleToggleTask}
+                onDelete={handleDeleteTask}
+                onEdit={setEditingTask}
+              />
+            ))}
           </View>
+        )}
 
-          <View
-            style={[
-              styles.activityCard,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-              },
-            ]}>
-            {activities.length > 0 ? (
-              activities.map((item, index) => {
-                const isLast = index === activities.length - 1;
-                const isMeeting = item.activity_type === 'meeting';
-
-                return (
-                  <View
-                    key={item.id}
-                    style={[
-                      styles.activityItem,
-                      !isLast && {
-                        borderBottomWidth: StyleSheet.hairlineWidth,
-                        borderBottomColor: colors.borderSubtle,
-                      },
-                    ]}>
-                    <View
-                      style={[
-                        styles.activityIconCircle,
-                        {
-                          backgroundColor: isMeeting
-                            ? isDark
-                              ? 'rgba(139, 92, 246, 0.2)'
-                              : '#F5F3FF'
-                            : isDark
-                            ? 'rgba(3, 126, 243, 0.2)'
-                            : '#EFF6FF',
-                        },
-                      ]}>
-                      <SymbolView
-                        name={
-                          isMeeting
-                            ? {
-                                ios: 'calendar',
-                                android: 'calendar_today',
-                                web: 'calendar_today',
-                              }
-                            : {
-                                ios: 'checklist',
-                                android: 'checklist',
-                                web: 'checklist',
-                              }
-                        }
-                        size={14}
-                        tintColor={isMeeting ? '#8B5CF6' : colors.primary}
-                      />
-                    </View>
-
-                    <View style={styles.activityBody}>
-                      <View style={styles.activityHeader}>
-                        <Text
-                          numberOfLines={1}
-                          style={[styles.activityTitle, { color: colors.text }]}>
-                          {item.title}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.activityTime,
-                            { color: colors.textSecondary },
-                          ]}>
-                          {formatTimeAgo(item.created_at)}
-                        </Text>
-                      </View>
-
-                      {item.description && (
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            styles.activityDesc,
-                            { color: colors.textSecondary },
-                          ]}>
-                          {item.description}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                );
-              })
-            ) : (
-              <Text
-                style={[
-                  styles.emptyActivityText,
-                  { color: colors.textSecondary },
-                ]}>
-                No recent activity recorded yet.
-              </Text>
-            )}
-          </View>
-        </View>
+        {/* Bottom padding so floating button doesn't cover content */}
+        <View style={{ height: 90 }} />
       </ScrollView>
 
-      {/* Task Creation Modal */}
-      <CreateTaskModal
-        visible={taskModalVisible}
-        onClose={() => setTaskModalVisible(false)}
-        onTaskCreated={loadData}
+      {/* Floating Action Button for rapid task creation */}
+      <FloatingActionButton
+        onPress={() => setQuickAddModalVisible(true)}
+        bottomOffset={20}
       />
 
-      {/* Meeting Creation Modal */}
+      {/* Modals */}
+      <QuickAddModal
+        visible={quickAddModalVisible}
+        onClose={() => setQuickAddModalVisible(false)}
+        onTaskCreated={loadData}
+        defaultDate={selectedDate}
+      />
+
       <CreateMeetingModal
         visible={meetingModalVisible}
         onClose={() => setMeetingModalVisible(false)}
         onMeetingCreated={loadData}
+      />
+
+      <EditTaskModal
+        task={editingTask}
+        visible={!!editingTask}
+        onClose={() => setEditingTask(null)}
+        onTaskUpdated={loadData}
       />
     </SafeAreaView>
   );
@@ -540,8 +539,9 @@ const styles = StyleSheet.create({
   },
   centerContainer: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
     gap: 12,
   },
   loadingText: {
@@ -549,174 +549,125 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 90,
+    paddingBottom: 20,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+  sectionWrap: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
-  headerLeft: {
-    flex: 1,
-  },
-  badgeRow: {
+  inlineAddBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  lcBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  lcBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-  dateSubtitle: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  greetingTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.6,
-  },
-  greetingSubtitle: {
-    fontSize: 14,
-    marginTop: 2,
-  },
-  quickActions: {
-    flexDirection: 'row',
     gap: 10,
-    marginBottom: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  actionButton: {
+  inlineInput: {
     flex: 1,
-    flexDirection: 'row',
+    fontSize: 14,
+    fontWeight: '500',
+    padding: 0,
+  },
+  inlineAddBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
   },
-  actionButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  metricsCol: {
-    flex: 1,
-  },
-  section: {
-    marginBottom: 22,
-  },
-  sectionHeader: {
+  agendaHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    paddingHorizontal: 18,
+    marginTop: 8,
+    marginBottom: 8,
   },
-  titleWithCount: {
+  agendaTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  sectionAction: {
-    fontSize: 13,
-    fontWeight: '700',
+  agendaTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.4,
   },
   countBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
     borderRadius: 10,
   },
   countBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
   },
-  emptySpotlight: {
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  emptySpotlightTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  emptySpotlightDesc: {
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  activityCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-  },
-  activityItem: {
+  actionShortcuts: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
+    gap: 8,
   },
-  activityIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  shortcutPill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4.5,
+    borderRadius: 12,
+    borderWidth: 1,
   },
-  activityBody: {
-    flex: 1,
+  shortcutText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
-  activityHeader: {
+  groupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 2,
+    marginBottom: 8,
+    marginTop: 4,
+    paddingHorizontal: 4,
   },
-  activityTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    flex: 1,
+  groupHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  activityTime: {
-    fontSize: 11,
-    fontWeight: '500',
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
-  activityDesc: {
-    fontSize: 12,
-  },
-  emptyActivityText: {
-    paddingVertical: 20,
-    textAlign: 'center',
+  groupTitle: {
     fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  emptyDayCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 8,
+    gap: 8,
+  },
+  emptyDayTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  emptyDaySubtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

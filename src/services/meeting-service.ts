@@ -3,7 +3,7 @@ import { logActivity } from './activity-service';
 import { INITIAL_MEETINGS } from './mock-data';
 import { supabase } from './supabase';
 
-let fallbackMeetings: Meeting[] = [...INITIAL_MEETINGS];
+let fallbackMeetings: Meeting[] = [];
 
 function generateId(): string {
   return 'mtg-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 8);
@@ -74,7 +74,18 @@ export async function getMeetings(filter?: MeetingFilter): Promise<Meeting[]> {
     }
 
     const typed = data as Meeting[];
-    fallbackMeetings = mergeMeetings(fallbackMeetings, typed);
+    const hasActiveFilter = Boolean(
+      (filter?.status && filter.status !== 'all') ||
+      (filter?.meeting_type && filter.meeting_type !== 'all') ||
+      (filter?.searchQuery && filter.searchQuery.trim().length > 0)
+    );
+
+    if (!hasActiveFilter || typed.length === 0) {
+      fallbackMeetings = typed;
+    } else {
+      fallbackMeetings = mergeMeetings(fallbackMeetings, typed);
+    }
+
     return filterMeetings(typed, filter);
   } catch (err) {
     console.warn('[MeetingService] Network error during getMeetings, using fallback:', err);

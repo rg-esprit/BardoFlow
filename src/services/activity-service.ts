@@ -2,7 +2,7 @@ import { Activity, ActivityFilter, ActivityType } from '@/types/database';
 import { INITIAL_ACTIVITIES } from './mock-data';
 import { supabase } from './supabase';
 
-let fallbackActivities: Activity[] = [...INITIAL_ACTIVITIES];
+let fallbackActivities: Activity[] = [];
 
 function generateId(): string {
   return 'act-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 8);

@@ -3,7 +3,7 @@ import { logActivity } from './activity-service';
 import { INITIAL_TASKS } from './mock-data';
 import { supabase } from './supabase';
 
-let fallbackTasks: Task[] = [...INITIAL_TASKS];
+let fallbackTasks: Task[] = [];
 
 function generateId(): string {
   return 'tsk-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 8);
@@ -105,7 +105,20 @@ export async function getTasks(filter?: TaskFilter): Promise<Task[]> {
     }
 
     const typed = data as Task[];
-    fallbackTasks = mergeTasks(fallbackTasks, typed);
+    const hasActiveFilter = Boolean(
+      (filter?.status && filter.status !== 'all') ||
+      (filter?.department && filter.department !== 'all') ||
+      (filter?.priority && filter.priority !== 'all') ||
+      (filter?.assignee && filter.assignee.trim().length > 0) ||
+      (filter?.searchQuery && filter.searchQuery.trim().length > 0)
+    );
+
+    if (!hasActiveFilter || typed.length === 0) {
+      fallbackTasks = typed;
+    } else {
+      fallbackTasks = mergeTasks(fallbackTasks, typed);
+    }
+
     return filterTasks(typed, filter);
   } catch (err) {
     console.warn('[TaskService] Network error during getTasks, using fallback:', err);

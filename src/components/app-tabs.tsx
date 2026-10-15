@@ -9,22 +9,45 @@ export default function AppTabs() {
 
   return (
     <NativeTabs
-      backgroundColor={colors.background}
+      backgroundColor={colors.card}
       indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}>
+      labelStyle={{
+        selected: { color: colors.primary },
+        default: { color: colors.textSecondary },
+      }}>
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Today</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/home.png')}
-          renderingMode="template"
+          sf="house"
+          md="home"
+          selectedColor={colors.primary}
         />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="explore">
-        <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
+      <NativeTabs.Trigger name="tasks">
+        <NativeTabs.Trigger.Label>Tasks</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/explore.png')}
-          renderingMode="template"
+          sf="checklist"
+          md="checklist"
+          selectedColor={colors.primary}
+        />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="meetings">
+        <NativeTabs.Trigger.Label>Meetings</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf="calendar"
+          md="calendar_today"
+          selectedColor={colors.primary}
+        />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="progress">
+        <NativeTabs.Trigger.Label>Progress</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf="chart.bar"
+          md="bar_chart"
+          selectedColor={colors.primary}
         />
       </NativeTabs.Trigger>
     </NativeTabs>

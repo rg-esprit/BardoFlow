@@ -7,8 +7,8 @@ import {
   RefreshControl,
   Pressable,
   ActivityIndicator,
-  Alert,
   useColorScheme,
+  useWindowDimensions,
   Vibration,
   Platform,
 } from 'react-native';
@@ -20,6 +20,7 @@ import { Colors } from '@/constants/theme';
 import { MeetingCard } from '@/components/MeetingCard';
 import { CreateMeetingModal } from '@/components/CreateMeetingModal';
 import { FloatingActionButton } from '@/components/FloatingActionButton';
+import { showAlert } from '@/utils/alert';
 
 const MEETING_TYPE_FILTERS: { key: MeetingType | 'all'; label: string; icon: string }[] = [
   { key: 'all', label: 'All Meetings', icon: 'tray.full.fill' },
@@ -41,6 +42,8 @@ export default function MeetingsScreen() {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const colors = Colors[isDark ? 'dark' : 'light'];
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -70,7 +73,7 @@ export default function MeetingsScreen() {
   };
 
   const handleDeleteMeeting = (meeting: Meeting) => {
-    Alert.alert(
+    showAlert(
       'Cancel Meeting',
       `Are you sure you want to cancel "${meeting.title}"?`,
       [
@@ -139,217 +142,241 @@ export default function MeetingsScreen() {
     <SafeAreaView
       edges={['top', 'left', 'right']}
       style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Top Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-            CALENDAR & SYNC
-          </Text>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>LC Meetings</Text>
+      <View style={[styles.pageWrapper, isDesktop && styles.pageWrapperDesktop]}>
+        {/* Top Header */}
+        <View style={[styles.header, isDesktop && styles.headerDesktop]}>
+          <View>
+            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+              CALENDAR & SYNC
+            </Text>
+            <Text style={[styles.headerTitle, isDesktop && styles.headerTitleDesktop, { color: colors.text }]}>
+              LC Meetings
+            </Text>
+          </View>
+
+          <Pressable
+            onPress={() => setModalVisible(true)}
+            style={({ pressed }) => [
+              styles.scheduleBtn,
+              isDesktop && styles.scheduleBtnDesktop,
+              {
+                backgroundColor: colors.primary,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}>
+            <SymbolView
+              name={{ ios: 'plus', android: 'add', web: 'add' }}
+              size={16}
+              tintColor="#FFFFFF"
+            />
+            <Text style={styles.scheduleBtnText}>
+              {isDesktop ? 'Schedule Meeting' : 'Schedule'}
+            </Text>
+          </Pressable>
         </View>
 
-        <Pressable
-          onPress={() => setModalVisible(true)}
-          style={({ pressed }) => [
-            styles.scheduleBtn,
-            {
-              backgroundColor: colors.primary,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}>
-          <SymbolView
-            name={{ ios: 'plus', android: 'add', web: 'add' }}
-            size={16}
-            tintColor="#FFFFFF"
-          />
-          <Text style={styles.scheduleBtnText}>Schedule</Text>
-        </Pressable>
-      </View>
-
-      {/* Horizontal Filter Bar */}
-      <View style={styles.filterWrap}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}>
-          {MEETING_TYPE_FILTERS.map((f) => {
-            const isSelected = typeFilter === f.key;
-            return (
-              <Pressable
-                key={f.key}
-                onPress={() => handleFilterPress(f.key)}
-                style={({ pressed }) => [
-                  styles.filterPill,
-                  {
-                    backgroundColor: isSelected
-                      ? colors.primary
-                      : isDark
-                      ? '#18202F'
-                      : colors.card,
-                    borderColor: isSelected ? colors.primary : colors.border,
-                    opacity: pressed ? 0.8 : 1,
-                  },
-                ]}>
-                <Text
-                  style={[
-                    styles.filterPillText,
+        {/* Horizontal Filter Bar */}
+        <View style={[styles.filterWrap, isDesktop && styles.filterWrapDesktop]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[styles.filterScroll, isDesktop && styles.filterScrollDesktop]}>
+            {MEETING_TYPE_FILTERS.map((f) => {
+              const isSelected = typeFilter === f.key;
+              return (
+                <Pressable
+                  key={f.key}
+                  onPress={() => handleFilterPress(f.key)}
+                  style={({ pressed }) => [
+                    styles.filterPill,
                     {
-                      color: isSelected ? '#FFFFFF' : colors.text,
-                      fontWeight: isSelected ? '700' : '600',
+                      backgroundColor: isSelected
+                        ? colors.primary
+                        : isDark
+                        ? '#18202F'
+                        : colors.card,
+                      borderColor: isSelected ? colors.primary : colors.border,
+                      opacity: pressed ? 0.8 : 1,
                     },
                   ]}>
-                  {f.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* Content */}
-      {loading && !refreshing ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Loading meetings...
-          </Text>
+                  <Text
+                    style={[
+                      styles.filterPillText,
+                      {
+                        color: isSelected ? '#FFFFFF' : colors.text,
+                        fontWeight: isSelected ? '700' : '600',
+                      },
+                    ]}>
+                    {f.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-              colors={[colors.primary]}
-            />
-          }>
-          {filteredMeetings.length === 0 ? (
-            <View
-              style={[
-                styles.emptyStateCard,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                },
-              ]}>
-              <SymbolView
-                name={{ ios: 'calendar', android: 'event', web: 'event' }}
-                size={38}
+
+        {/* Content */}
+        {loading && !refreshing ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              Loading meetings...
+            </Text>
+          </View>
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[styles.listContent, isDesktop && styles.listContentDesktop]}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
                 tintColor={colors.primary}
+                colors={[colors.primary]}
               />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                No scheduled meetings
-              </Text>
-              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                Tap below to schedule an LCM, EB alignment, or departmental sync.
-              </Text>
-              <Pressable
-                onPress={() => setModalVisible(true)}
-                style={({ pressed }) => [
-                  styles.emptyCtaBtn,
+            }>
+            {filteredMeetings.length === 0 ? (
+              <View
+                style={[
+                  styles.emptyStateCard,
                   {
-                    backgroundColor: colors.primary,
-                    opacity: pressed ? 0.85 : 1,
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
                   },
                 ]}>
                 <SymbolView
-                  name={{ ios: 'plus', android: 'add', web: 'add' }}
-                  size={15}
-                  tintColor="#FFFFFF"
+                  name={{ ios: 'calendar', android: 'event', web: 'event' }}
+                  size={38}
+                  tintColor={colors.primary}
                 />
-                <Text style={styles.emptyCtaText}>Schedule Meeting</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <>
-              {/* Spotlight Section */}
-              {spotlightMeeting && (
-                <View style={styles.sectionWrap}>
-                  <MeetingCard
-                    meeting={spotlightMeeting}
-                    spotlight
-                    onDelete={handleDeleteMeeting}
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                  No scheduled meetings
+                </Text>
+                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                  Tap below to schedule an LCM, EB alignment, or departmental sync.
+                </Text>
+                <Pressable
+                  onPress={() => setModalVisible(true)}
+                  style={({ pressed }) => [
+                    styles.emptyCtaBtn,
+                    {
+                      backgroundColor: colors.primary,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}>
+                  <SymbolView
+                    name={{ ios: 'plus', android: 'add', web: 'add' }}
+                    size={15}
+                    tintColor="#FFFFFF"
                   />
-                </View>
-              )}
-
-              {/* Today's Other Meetings */}
-              {todayMeetings.length > 0 && (
-                <View style={styles.sectionWrap}>
-                  <View style={styles.sectionHeader}>
-                    <View style={styles.sectionHeaderLeft}>
-                      <View style={[styles.statusDot, { backgroundColor: colors.primary }]} />
-                      <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                        Today ({todayMeetings.length})
-                      </Text>
-                    </View>
-                  </View>
-                  {todayMeetings.map((m) => (
+                  <Text style={styles.emptyCtaText}>Schedule Meeting</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                {/* Spotlight Section */}
+                {spotlightMeeting && (
+                  <View style={styles.sectionWrap}>
                     <MeetingCard
-                      key={m.id}
-                      meeting={m}
+                      meeting={spotlightMeeting}
+                      spotlight
                       onDelete={handleDeleteMeeting}
                     />
-                  ))}
-                </View>
-              )}
+                  </View>
+                )}
 
-              {/* Later Upcoming Meetings */}
-              {laterMeetings.length > 0 && (
-                <View style={styles.sectionWrap}>
-                  <View style={styles.sectionHeader}>
-                    <View style={styles.sectionHeaderLeft}>
-                      <View style={[styles.statusDot, { backgroundColor: colors.primary }]} />
-                      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-                        Upcoming ({laterMeetings.length})
-                      </Text>
+                {/* Today's Other Meetings */}
+                {todayMeetings.length > 0 && (
+                  <View style={styles.sectionWrap}>
+                    <View style={styles.sectionHeader}>
+                      <View style={styles.sectionHeaderLeft}>
+                        <View style={[styles.statusDot, { backgroundColor: colors.primary }]} />
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                          Today ({todayMeetings.length})
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[styles.meetingGrid, isDesktop && styles.meetingGridDesktop]}>
+                      {todayMeetings.map((m) => (
+                        <View
+                          key={m.id}
+                          style={[styles.meetingCardBox, isDesktop && styles.meetingCardBoxDesktop]}>
+                          <MeetingCard
+                            meeting={m}
+                            onDelete={handleDeleteMeeting}
+                          />
+                        </View>
+                      ))}
                     </View>
                   </View>
-                  {laterMeetings.map((m) => (
-                    <MeetingCard
-                      key={m.id}
-                      meeting={m}
-                      onDelete={handleDeleteMeeting}
-                    />
-                  ))}
-                </View>
-              )}
+                )}
 
-              {/* Past Meetings */}
-              {pastMeetings.length > 0 && (
-                <View style={styles.sectionWrap}>
-                  <View style={styles.sectionHeader}>
-                    <View style={styles.sectionHeaderLeft}>
-                      <View style={[styles.statusDot, { backgroundColor: colors.textSecondary }]} />
-                      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-                        Past Meetings ({pastMeetings.length})
-                      </Text>
+                {/* Later Upcoming Meetings */}
+                {laterMeetings.length > 0 && (
+                  <View style={styles.sectionWrap}>
+                    <View style={styles.sectionHeader}>
+                      <View style={styles.sectionHeaderLeft}>
+                        <View style={[styles.statusDot, { backgroundColor: colors.primary }]} />
+                        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+                          Upcoming ({laterMeetings.length})
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[styles.meetingGrid, isDesktop && styles.meetingGridDesktop]}>
+                      {laterMeetings.map((m) => (
+                        <View
+                          key={m.id}
+                          style={[styles.meetingCardBox, isDesktop && styles.meetingCardBoxDesktop]}>
+                          <MeetingCard
+                            meeting={m}
+                            onDelete={handleDeleteMeeting}
+                          />
+                        </View>
+                      ))}
                     </View>
                   </View>
-                  {pastMeetings.map((m) => (
-                    <MeetingCard
-                      key={m.id}
-                      meeting={m}
-                      onDelete={handleDeleteMeeting}
-                    />
-                  ))}
-                </View>
-              )}
-            </>
-          )}
+                )}
 
-          <View style={{ height: 90 }} />
-        </ScrollView>
+                {/* Past Meetings */}
+                {pastMeetings.length > 0 && (
+                  <View style={styles.sectionWrap}>
+                    <View style={styles.sectionHeader}>
+                      <View style={styles.sectionHeaderLeft}>
+                        <View style={[styles.statusDot, { backgroundColor: colors.textSecondary }]} />
+                        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+                          Past Meetings ({pastMeetings.length})
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[styles.meetingGrid, isDesktop && styles.meetingGridDesktop]}>
+                      {pastMeetings.map((m) => (
+                        <View
+                          key={m.id}
+                          style={[styles.meetingCardBox, isDesktop && styles.meetingCardBoxDesktop]}>
+                          <MeetingCard
+                            meeting={m}
+                            onDelete={handleDeleteMeeting}
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
+
+            <View style={{ height: isDesktop ? 40 : 90 }} />
+          </ScrollView>
+        )}
+      </View>
+
+      {/* Floating Action Button only on mobile */}
+      {!isDesktop && (
+        <FloatingActionButton
+          onPress={() => setModalVisible(true)}
+          bottomOffset={96}
+        />
       )}
-
-      {/* Floating Action Button */}
-      <FloatingActionButton
-        onPress={() => setModalVisible(true)}
-        bottomOffset={96}
-      />
 
       {/* Schedule Meeting Modal */}
       <CreateMeetingModal
@@ -365,6 +392,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  pageWrapper: {
+    flex: 1,
+    width: '100%',
+  },
+  pageWrapperDesktop: {
+    maxWidth: 1120,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -372,6 +408,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 6,
+  },
+  headerDesktop: {
+    paddingHorizontal: 8,
+    paddingTop: 16,
+    paddingBottom: 12,
   },
   headerSubtitle: {
     fontSize: 11,
@@ -383,6 +424,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.4,
   },
+  headerTitleDesktop: {
+    fontSize: 28,
+  },
   scheduleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -390,6 +434,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
+  },
+  scheduleBtnDesktop: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 12,
+    gap: 6,
   },
   scheduleBtnText: {
     color: '#FFFFFF',
@@ -399,9 +449,15 @@ const styles = StyleSheet.create({
   filterWrap: {
     marginVertical: 6,
   },
+  filterWrapDesktop: {
+    marginVertical: 10,
+  },
   filterScroll: {
     paddingHorizontal: 16,
     gap: 7,
+  },
+  filterScrollDesktop: {
+    paddingHorizontal: 8,
   },
   filterPill: {
     paddingHorizontal: 12,
@@ -417,8 +473,12 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 20,
   },
+  listContentDesktop: {
+    paddingHorizontal: 8,
+    paddingTop: 8,
+  },
   sectionWrap: {
-    marginBottom: 8,
+    marginBottom: 12,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -443,6 +503,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.2,
     textTransform: 'uppercase',
+  },
+  meetingGrid: {
+    flexDirection: 'column',
+    gap: 8,
+  },
+  meetingGridDesktop: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  meetingCardBox: {
+    width: '100%',
+  },
+  meetingCardBoxDesktop: {
+    width: '49%',
+    minWidth: 320,
+    flexGrow: 1,
   },
   emptyStateCard: {
     borderRadius: 20,

@@ -7,6 +7,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   useColorScheme,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
@@ -30,6 +31,8 @@ export default function ProgressScreen() {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const colors = Colors[isDark ? 'dark' : 'light'];
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -132,357 +135,368 @@ export default function ProgressScreen() {
     <SafeAreaView
       edges={['top', 'left', 'right']}
       style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Top Header */}
-      <View style={styles.header}>
-        <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-          PERFORMANCE & MOMENTUM
-        </Text>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          LC Bardo Cockpit
-        </Text>
-      </View>
-
-      {loading && !refreshing ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Calculating LC metrics...
+      <View style={[styles.pageWrapper, isDesktop && styles.pageWrapperDesktop]}>
+        {/* Top Header */}
+        <View style={[styles.header, isDesktop && styles.headerDesktop]}>
+          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+            PERFORMANCE & MOMENTUM
+          </Text>
+          <Text style={[styles.headerTitle, isDesktop && styles.headerTitleDesktop, { color: colors.text }]}>
+            LC Bardo Cockpit
           </Text>
         </View>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-              colors={[colors.primary]}
-            />
-          }>
-          {/* Hero Performance Score Card */}
-          <View
-            style={[
-              styles.heroCard,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-              },
-            ]}>
-            <View style={styles.heroTopRow}>
-              <View>
-                <Text style={[styles.heroScoreLabel, { color: colors.textSecondary }]}>
-                  EXECUTION INDEX
-                </Text>
-                <View style={styles.scoreRow}>
-                  <Text style={[styles.heroScore, { color: colors.primary }]}>
-                    {overallRate}%
-                  </Text>
-                  <View
-                    style={[
-                      styles.statusPill,
-                      {
-                        backgroundColor: isDark ? 'rgba(3, 126, 243, 0.2)' : colors.primaryLight,
-                        borderColor: colors.primary,
-                      },
-                    ]}>
-                    <Text style={[styles.statusPillText, { color: momentumStatus.color }]}>
-                      {momentumStatus.text}
-                    </Text>
-                  </View>
-                </View>
-              </View>
 
-              <View
-                style={[
-                  styles.scoreIconBox,
-                  { backgroundColor: isDark ? '#1E293B' : colors.primaryLight },
-                ]}>
-                <SymbolView
-                  name={{ ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }}
-                  size={26}
-                  tintColor={colors.primary}
-                />
-              </View>
-            </View>
-
-            {/* Overall Progress Track */}
-            <View
-              style={[
-                styles.progressBarTrack,
-                { backgroundColor: isDark ? '#1E293B' : colors.backgroundElement },
-              ]}>
-              <View
-                style={[
-                  styles.progressBarFill,
-                  {
-                    width: `${overallRate}%`,
-                    backgroundColor: colors.primary,
-                  },
-                ]}
-              />
-            </View>
-
-            {/* Metrics Triple Row */}
-            <View style={styles.metricsRow}>
-              <View style={styles.metricCol}>
-                <Text style={[styles.metricValue, { color: colors.success }]}>
-                  {completedTasks}
-                </Text>
-                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
-                  Completed
-                </Text>
-              </View>
-
-              <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
-
-              <View style={styles.metricCol}>
-                <Text style={[styles.metricValue, { color: colors.primary }]}>
-                  {inProgressTasks}
-                </Text>
-                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
-                  In Progress
-                </Text>
-              </View>
-
-              <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
-
-              <View style={styles.metricCol}>
-                <Text style={[styles.metricValue, { color: colors.urgent }]}>
-                  {urgentTasks}
-                </Text>
-                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
-                  Priority Items
-                </Text>
-              </View>
-            </View>
+        {loading && !refreshing ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              Calculating LC metrics...
+            </Text>
           </View>
-
-          {/* Department Execution Comparison */}
-          <View style={styles.sectionWrap}>
-            <View style={styles.sectionTitleRow}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Department Progress
-              </Text>
-              <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-                Leaderboard
-              </Text>
-            </View>
-
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[styles.scrollContent, isDesktop && styles.scrollContentDesktop]}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.primary}
+                colors={[colors.primary]}
+              />
+            }>
+            {/* Hero Performance Score Card */}
             <View
               style={[
-                styles.cardBox,
+                styles.heroCard,
+                isDesktop && styles.heroCardDesktop,
                 {
                   backgroundColor: colors.card,
                   borderColor: colors.border,
                 },
               ]}>
-              {departmentStats.map((item, idx) => {
-                const deptConf =
-                  DepartmentColors[item.dept] || DepartmentColors['General'];
-                const isLast = idx === departmentStats.length - 1;
-
-                return (
-                  <View
-                    key={item.dept}
-                    style={[
-                      styles.deptRow,
-                      !isLast && {
-                        borderBottomWidth: StyleSheet.hairlineWidth,
-                        borderBottomColor: colors.borderSubtle,
-                      },
-                    ]}>
-                    <View style={styles.deptTop}>
-                      <DepartmentBadge department={item.dept} size="sm" />
-                      <Text style={[styles.deptRateText, { color: colors.text }]}>
-                        {item.rate}%
-                      </Text>
-                    </View>
-
-                    {/* Progress Bar */}
+              <View style={styles.heroTopRow}>
+                <View>
+                  <Text style={[styles.heroScoreLabel, { color: colors.textSecondary }]}>
+                    EXECUTION INDEX
+                  </Text>
+                  <View style={styles.scoreRow}>
+                    <Text style={[styles.heroScore, { color: colors.primary }]}>
+                      {overallRate}%
+                    </Text>
                     <View
                       style={[
-                        styles.deptBarTrack,
-                        { backgroundColor: isDark ? '#1E293B' : colors.backgroundElement },
+                        styles.statusPill,
+                        {
+                          backgroundColor: isDark ? 'rgba(3, 126, 243, 0.2)' : colors.primaryLight,
+                          borderColor: colors.primary,
+                        },
                       ]}>
-                      <View
-                        style={[
-                          styles.deptBarFill,
-                          {
-                            width: `${item.rate}%`,
-                            backgroundColor: deptConf.color,
-                          },
-                        ]}
-                      />
+                      <Text style={[styles.statusPillText, { color: momentumStatus.color }]}>
+                        {momentumStatus.text}
+                      </Text>
                     </View>
+                  </View>
+                </View>
 
-                    <Text style={[styles.deptSubText, { color: colors.textSecondary }]}>
-                      {item.done} of {item.total} tasks completed • {item.pending} remaining
+                <View
+                  style={[
+                    styles.scoreIconBox,
+                    { backgroundColor: isDark ? '#1E293B' : colors.primaryLight },
+                  ]}>
+                  <SymbolView
+                    name={{ ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }}
+                    size={26}
+                    tintColor={colors.primary}
+                  />
+                </View>
+              </View>
+
+              {/* Overall Progress Track */}
+              <View
+                style={[
+                  styles.progressBarTrack,
+                  { backgroundColor: isDark ? '#1E293B' : colors.backgroundElement },
+                ]}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      width: `${overallRate}%`,
+                      backgroundColor: colors.primary,
+                    },
+                  ]}
+                />
+              </View>
+
+              {/* Metrics Triple Row */}
+              <View style={styles.metricsRow}>
+                <View style={styles.metricCol}>
+                  <Text style={[styles.metricValue, { color: colors.success }]}>
+                    {completedTasks}
+                  </Text>
+                  <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
+                    Completed
+                  </Text>
+                </View>
+
+                <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
+
+                <View style={styles.metricCol}>
+                  <Text style={[styles.metricValue, { color: colors.primary }]}>
+                    {inProgressTasks}
+                  </Text>
+                  <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
+                    In Progress
+                  </Text>
+                </View>
+
+                <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
+
+                <View style={styles.metricCol}>
+                  <Text style={[styles.metricValue, { color: colors.urgent }]}>
+                    {urgentTasks}
+                  </Text>
+                  <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
+                    Priority Items
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Dashboard Content: 2-column on desktop, 1-column on mobile */}
+            <View style={[styles.dashboardGrid, isDesktop && styles.dashboardGridDesktop]}>
+              {/* Left Column: Department Progress */}
+              <View style={[styles.gridCol, isDesktop && styles.gridColLeft]}>
+                <View style={styles.sectionWrap}>
+                  <View style={styles.sectionTitleRow}>
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                      Department Progress
+                    </Text>
+                    <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+                      Leaderboard
                     </Text>
                   </View>
-                );
-              })}
-            </View>
-          </View>
 
-          {/* Priority Distribution Matrix */}
-          <View style={styles.sectionWrap}>
-            <View style={styles.sectionTitleRow}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Priority Breakdown
-              </Text>
-              <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-                {totalTasks} total tasks
-              </Text>
-            </View>
-
-            <View style={styles.priorityGrid}>
-              {priorityStats.map((p) => {
-                const pct =
-                  totalTasks > 0 ? Math.round((p.count / totalTasks) * 100) : 0;
-                return (
                   <View
-                    key={p.key}
                     style={[
-                      styles.priorityCard,
+                      styles.cardBox,
                       {
                         backgroundColor: colors.card,
                         borderColor: colors.border,
                       },
                     ]}>
-                    <View style={styles.priorityCardHeader}>
-                      <View style={[styles.priorityDot, { backgroundColor: p.color }]} />
-                      <Text style={[styles.priorityCardLabel, { color: colors.textSecondary }]}>
-                        {p.label}
-                      </Text>
-                    </View>
-                    <Text style={[styles.priorityCardCount, { color: colors.text }]}>
-                      {p.count}
-                    </Text>
-                    <Text style={[styles.priorityCardPct, { color: p.color }]}>
-                      {pct}% of tasks
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
+                    {departmentStats.map((item, idx) => {
+                      const deptConf =
+                        DepartmentColors[item.dept] || DepartmentColors['General'];
+                      const isLast = idx === departmentStats.length - 1;
 
-          {/* Live LC Activity Feed */}
-          <View style={styles.sectionWrap}>
-            <View style={styles.sectionTitleRow}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                LC Activity Feed
-              </Text>
-              <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-                Real-time
-              </Text>
-            </View>
+                      return (
+                        <View
+                          key={item.dept}
+                          style={[
+                            styles.deptRow,
+                            !isLast && {
+                              borderBottomWidth: StyleSheet.hairlineWidth,
+                              borderBottomColor: colors.borderSubtle,
+                            },
+                          ]}>
+                          <View style={styles.deptTop}>
+                            <DepartmentBadge department={item.dept} size="sm" />
+                            <Text style={[styles.deptRateText, { color: colors.text }]}>
+                              {item.rate}%
+                            </Text>
+                          </View>
 
-            <View
-              style={[
-                styles.cardBox,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                },
-              ]}>
-              {activities.length === 0 ? (
-                <View style={styles.emptyActivity}>
-                  <Text style={[styles.emptyActivityText, { color: colors.textSecondary }]}>
-                    No recent activity logged yet.
-                  </Text>
-                </View>
-              ) : (
-                activities.map((act, index) => {
-                  const isLast = index === activities.length - 1;
-                  const isTask = act.activity_type === 'task';
-                  const isMeeting = act.activity_type === 'meeting';
-
-                  return (
-                    <View
-                      key={act.id}
-                      style={[
-                        styles.activityItem,
-                        !isLast && {
-                          borderBottomWidth: StyleSheet.hairlineWidth,
-                          borderBottomColor: colors.borderSubtle,
-                        },
-                      ]}>
-                      <View
-                        style={[
-                          styles.activityIconWrap,
-                          {
-                            backgroundColor: isTask
-                              ? isDark
-                                ? 'rgba(16, 185, 129, 0.2)'
-                                : '#ECFDF5'
-                              : isMeeting
-                              ? isDark
-                                ? 'rgba(3, 126, 243, 0.2)'
-                                : '#EFF6FF'
-                              : isDark
-                              ? '#1E293B'
-                              : colors.backgroundElement,
-                          },
-                        ]}>
-                        <SymbolView
-                          name={
-                            isTask
-                              ? { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }
-                              : isMeeting
-                              ? { ios: 'calendar', android: 'event', web: 'event' }
-                              : { ios: 'bell.fill', android: 'notifications', web: 'notifications' }
-                          }
-                          size={14}
-                          tintColor={
-                            isTask
-                              ? colors.success
-                              : isMeeting
-                              ? colors.primary
-                              : colors.textSecondary
-                          }
-                        />
-                      </View>
-
-                      <View style={styles.activityBody}>
-                        <View style={styles.activityTopRow}>
-                          <Text
-                            numberOfLines={1}
-                            style={[styles.activityTitle, { color: colors.text }]}>
-                            {act.title}
-                          </Text>
-                          <Text
+                          {/* Progress Bar */}
+                          <View
                             style={[
-                              styles.activityTimestamp,
-                              { color: colors.textSecondary },
+                              styles.deptBarTrack,
+                              { backgroundColor: isDark ? '#1E293B' : colors.backgroundElement },
                             ]}>
-                            {formatTimeAgo(act.created_at)}
+                            <View
+                              style={[
+                                styles.deptBarFill,
+                                {
+                                  width: `${item.rate}%`,
+                                  backgroundColor: deptConf.color,
+                                },
+                              ]}
+                            />
+                          </View>
+
+                          <Text style={[styles.deptSubText, { color: colors.textSecondary }]}>
+                            {item.done} of {item.total} tasks completed • {item.pending} remaining
                           </Text>
                         </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
 
-                        {act.description ? (
-                          <Text
-                            numberOfLines={2}
-                            style={[
-                              styles.activityDesc,
-                              { color: colors.textSecondary },
-                            ]}>
-                            {act.description}
+              {/* Right Column: Priority Matrix & Activity Feed */}
+              <View style={[styles.gridCol, isDesktop && styles.gridColRight]}>
+                {/* Priority Distribution Matrix */}
+                <View style={styles.sectionWrap}>
+                  <View style={styles.sectionTitleRow}>
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                      Priority Breakdown
+                    </Text>
+                    <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+                      {totalTasks} total tasks
+                    </Text>
+                  </View>
+
+                  <View style={styles.priorityGrid}>
+                    {priorityStats.map((p) => {
+                      const pct =
+                        totalTasks > 0 ? Math.round((p.count / totalTasks) * 100) : 0;
+                      return (
+                        <View
+                          key={p.key}
+                          style={[
+                            styles.priorityCard,
+                            {
+                              backgroundColor: colors.card,
+                              borderColor: colors.border,
+                            },
+                          ]}>
+                          <View style={styles.priorityCardHeader}>
+                            <View style={[styles.priorityDot, { backgroundColor: p.color }]} />
+                            <Text style={[styles.priorityCardLabel, { color: colors.textSecondary }]}>
+                              {p.label}
+                            </Text>
+                          </View>
+                          <Text style={[styles.priorityCardCount, { color: colors.text }]}>
+                            {p.count}
                           </Text>
-                        ) : null}
-                      </View>
-                    </View>
-                  );
-                })
-              )}
-            </View>
-          </View>
+                          <Text style={[styles.priorityCardPct, { color: p.color }]}>
+                            {pct}% of tasks
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
 
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      )}
+                {/* Live LC Activity Feed */}
+                <View style={styles.sectionWrap}>
+                  <View style={styles.sectionTitleRow}>
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                      LC Activity Feed
+                    </Text>
+                    <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+                      Real-time
+                    </Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.cardBox,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                      },
+                    ]}>
+                    {activities.length === 0 ? (
+                      <View style={styles.emptyActivity}>
+                        <Text style={[styles.emptyActivityText, { color: colors.textSecondary }]}>
+                          No recent activity logged yet.
+                        </Text>
+                      </View>
+                    ) : (
+                      activities.map((act, index) => {
+                        const isLast = index === activities.length - 1;
+                        const isTask = act.activity_type === 'task';
+                        const isMeeting = act.activity_type === 'meeting';
+
+                        return (
+                          <View
+                            key={act.id}
+                            style={[
+                              styles.activityItem,
+                              !isLast && {
+                                borderBottomWidth: StyleSheet.hairlineWidth,
+                                borderBottomColor: colors.borderSubtle,
+                              },
+                            ]}>
+                            <View
+                              style={[
+                                styles.activityIconWrap,
+                                {
+                                  backgroundColor: isTask
+                                    ? isDark
+                                      ? 'rgba(16, 185, 129, 0.2)'
+                                      : '#ECFDF5'
+                                    : isMeeting
+                                    ? isDark
+                                      ? 'rgba(3, 126, 243, 0.2)'
+                                      : '#EFF6FF'
+                                    : isDark
+                                    ? '#1E293B'
+                                    : colors.backgroundElement,
+                                },
+                              ]}>
+                              <SymbolView
+                                name={
+                                  isTask
+                                    ? { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }
+                                    : isMeeting
+                                    ? { ios: 'calendar', android: 'event', web: 'event' }
+                                    : { ios: 'bell.fill', android: 'notifications', web: 'notifications' }
+                                }
+                                size={14}
+                                tintColor={
+                                  isTask
+                                    ? colors.success
+                                    : isMeeting
+                                    ? colors.primary
+                                    : colors.textSecondary
+                                }
+                              />
+                            </View>
+
+                            <View style={styles.activityBody}>
+                              <View style={styles.activityTopRow}>
+                                <Text
+                                  numberOfLines={1}
+                                  style={[styles.activityTitle, { color: colors.text }]}>
+                                  {act.title}
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.activityTimestamp,
+                                    { color: colors.textSecondary },
+                                  ]}>
+                                  {formatTimeAgo(act.created_at)}
+                                </Text>
+                              </View>
+
+                              {Boolean(act.description) && (
+                                <Text
+                                  numberOfLines={2}
+                                  style={[
+                                    styles.activityDesc,
+                                    { color: colors.textSecondary },
+                                  ]}>
+                                  {act.description}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })
+                    )}
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <View style={{ height: isDesktop ? 40 : 80 }} />
+          </ScrollView>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -490,6 +504,15 @@ export default function ProgressScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  pageWrapper: {
+    flex: 1,
+    width: '100%',
+  },
+  pageWrapperDesktop: {
+    maxWidth: 1120,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
   },
   centerContainer: {
     flex: 1,
@@ -507,6 +530,11 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 6,
   },
+  headerDesktop: {
+    paddingHorizontal: 8,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
   headerSubtitle: {
     fontSize: 11,
     fontWeight: '700',
@@ -517,10 +545,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.4,
   },
+  headerTitleDesktop: {
+    fontSize: 28,
+  },
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 6,
     paddingBottom: 24,
+  },
+  scrollContentDesktop: {
+    paddingHorizontal: 8,
+    paddingTop: 8,
   },
   heroCard: {
     borderRadius: 20,
@@ -532,6 +567,29 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
+  },
+  heroCardDesktop: {
+    padding: 24,
+    marginBottom: 20,
+  },
+  dashboardGrid: {
+    flexDirection: 'column',
+  },
+  dashboardGridDesktop: {
+    flexDirection: 'row',
+    gap: 20,
+    alignItems: 'flex-start',
+  },
+  gridCol: {
+    width: '100%',
+  },
+  gridColLeft: {
+    flex: 5.5,
+    minWidth: 380,
+  },
+  gridColRight: {
+    flex: 4.5,
+    minWidth: 340,
   },
   heroTopRow: {
     flexDirection: 'row',

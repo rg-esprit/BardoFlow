@@ -8,10 +8,10 @@ import {
   RefreshControl,
   Pressable,
   ActivityIndicator,
-  Alert,
   useColorScheme,
   Vibration,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
@@ -26,6 +26,7 @@ import { TaskCard } from '@/components/TaskCard';
 import { QuickAddModal } from '@/components/QuickAddModal';
 import { EditTaskModal } from '@/components/EditTaskModal';
 import { FloatingActionButton } from '@/components/FloatingActionButton';
+import { showAlert } from '@/utils/alert';
 
 type StatusTab = 'all' | 'pending' | 'urgent' | 'completed';
 
@@ -51,6 +52,8 @@ export default function TasksScreen() {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const colors = Colors[isDark ? 'dark' : 'light'];
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -100,7 +103,7 @@ export default function TasksScreen() {
   };
 
   const handleDeleteTask = (task: Task) => {
-    Alert.alert(
+    showAlert(
       'Delete Task',
       `Are you sure you want to delete "${task.title}"?`,
       [
@@ -148,7 +151,10 @@ export default function TasksScreen() {
       // Tab filter
       if (activeTab === 'pending' && t.status === 'completed') return false;
       if (activeTab === 'completed' && t.status !== 'completed') return false;
-      if (activeTab === 'urgent' && (t.status === 'completed' || (t.priority !== 'urgent' && t.priority !== 'high'))) {
+      if (
+        activeTab === 'urgent' &&
+        (t.status === 'completed' || (t.priority !== 'urgent' && t.priority !== 'high'))
+      ) {
         return false;
       }
 
@@ -206,234 +212,238 @@ export default function TasksScreen() {
     <SafeAreaView
       edges={['top', 'left', 'right']}
       style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-            AIESEC IN BARDO
-          </Text>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Task Center</Text>
-        </View>
+      {/* Scrollable Container with Responsive Max-Width */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }>
+        <View style={styles.responsiveContainer}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View>
+              <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+                AIESEC IN BARDO
+              </Text>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>Task Center</Text>
+            </View>
 
-        <Pressable
-          onPress={() => setQuickAddVisible(true)}
-          style={({ pressed }) => [
-            styles.headerAddBtn,
-            {
-              backgroundColor: colors.primary,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}>
-          <SymbolView
-            name={{ ios: 'plus', android: 'add', web: 'add' }}
-            size={16}
-            tintColor="#FFFFFF"
-          />
-          <Text style={styles.headerAddBtnText}>Add</Text>
-        </Pressable>
-      </View>
-
-      {/* Modern Search Bar */}
-      <View style={styles.searchContainer}>
-        <View
-          style={[
-            styles.searchBar,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            },
-          ]}>
-          <SymbolView
-            name={{
-              ios: 'magnifyingglass',
-              android: 'search',
-              web: 'search',
-            }}
-            size={16}
-            tintColor={colors.textSecondary}
-          />
-          <TextInput
-            placeholder="Search tasks, departments, assignees..."
-            placeholderTextColor={colors.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            style={[styles.searchInput, { color: colors.text }]}
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
             <Pressable
-              hitSlop={8}
-              onPress={() => setSearchQuery('')}
-              style={styles.clearBtn}>
+              onPress={() => setQuickAddVisible(true)}
+              style={({ pressed }) => [
+                styles.headerAddBtn,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}>
               <SymbolView
-                name={{
-                  ios: 'xmark.circle.fill',
-                  android: 'cancel',
-                  web: 'cancel',
-                }}
+                name={{ ios: 'plus', android: 'add', web: 'add' }}
                 size={16}
-                tintColor={colors.textSecondary}
+                tintColor="#FFFFFF"
               />
+              <Text style={styles.headerAddBtnText}>Add Task</Text>
             </Pressable>
-          )}
-        </View>
-      </View>
+          </View>
 
-      {/* Segmented Status Pill Filter */}
-      <View style={styles.tabsContainer}>
-        <View
-          style={[
-            styles.segmentedBar,
-            {
-              backgroundColor: isDark ? '#18202F' : colors.card,
-              borderColor: colors.border,
-            },
-          ]}>
-          {STATUS_TABS.map((tab) => {
-            const isSelected = activeTab === tab.key;
-            const count = tabCounts[tab.key];
-            return (
-              <Pressable
-                key={tab.key}
-                onPress={() => handleTabChange(tab.key)}
+          {/* Desktop Search & Status Row or Mobile Stack */}
+          <View style={isDesktop ? styles.desktopControlsRow : undefined}>
+            {/* Search Bar */}
+            <View style={isDesktop ? styles.desktopSearchWrap : styles.searchContainer}>
+              <View
                 style={[
-                  styles.tabPill,
+                  styles.searchBar,
                   {
-                    backgroundColor: isSelected
-                      ? colors.primary
-                      : 'transparent',
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
                   },
                 ]}>
-                <Text
-                  style={[
-                    styles.tabLabel,
-                    {
-                      color: isSelected ? '#FFFFFF' : colors.textSecondary,
-                      fontWeight: isSelected ? '700' : '600',
-                    },
-                  ]}>
-                  {tab.label}
-                </Text>
-                {count > 0 && (
-                  <View
-                    style={[
-                      styles.tabCountPill,
+                <SymbolView
+                  name={{
+                    ios: 'magnifyingglass',
+                    android: 'search',
+                    web: 'search',
+                  }}
+                  size={16}
+                  tintColor={colors.textSecondary}
+                />
+                <TextInput
+                  placeholder="Search tasks, departments, assignees..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  style={[styles.searchInput, { color: colors.text }]}
+                  returnKeyType="search"
+                />
+                {searchQuery.length > 0 && (
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => setSearchQuery('')}
+                    style={styles.clearBtn}>
+                    <SymbolView
+                      name={{
+                        ios: 'xmark.circle.fill',
+                        android: 'cancel',
+                        web: 'cancel',
+                      }}
+                      size={16}
+                      tintColor={colors.textSecondary}
+                    />
+                  </Pressable>
+                )}
+              </View>
+            </View>
+
+            {/* Segmented Status Filter */}
+            <View style={isDesktop ? styles.desktopTabsWrap : styles.tabsContainer}>
+              <View
+                style={[
+                  styles.segmentedBar,
+                  {
+                    backgroundColor: isDark ? '#18202F' : colors.card,
+                    borderColor: colors.border,
+                  },
+                ]}>
+                {STATUS_TABS.map((tab) => {
+                  const isSelected = activeTab === tab.key;
+                  const count = tabCounts[tab.key];
+                  return (
+                    <Pressable
+                      key={tab.key}
+                      onPress={() => handleTabChange(tab.key)}
+                      style={[
+                        styles.tabPill,
+                        {
+                          backgroundColor: isSelected
+                            ? colors.primary
+                            : 'transparent',
+                        },
+                      ]}>
+                      <Text
+                        style={[
+                          styles.tabLabel,
+                          {
+                            color: isSelected ? '#FFFFFF' : colors.textSecondary,
+                            fontWeight: isSelected ? '700' : '600',
+                          },
+                        ]}>
+                        {tab.label}
+                      </Text>
+                      {count > 0 && (
+                        <View
+                          style={[
+                            styles.tabCountPill,
+                            {
+                              backgroundColor: isSelected
+                                ? 'rgba(255, 255, 255, 0.25)'
+                                : isDark
+                                ? '#1E293B'
+                                : colors.backgroundElement,
+                            },
+                          ]}>
+                          <Text
+                            style={[
+                              styles.tabCountText,
+                              {
+                                color: isSelected ? '#FFFFFF' : colors.textSecondary,
+                              },
+                            ]}>
+                            {count}
+                          </Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+
+          {/* Department Filter Pills */}
+          <View style={styles.deptScrollWrap}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.deptScrollContent}>
+              {DEPARTMENTS.map((dept) => {
+                const isSelected = deptFilter === dept;
+                const count = deptCounts[dept] || 0;
+                const deptConf =
+                  dept !== 'all'
+                    ? DepartmentColors[dept] || DepartmentColors['General']
+                    : null;
+
+                return (
+                  <Pressable
+                    key={dept}
+                    onPress={() => {
+                      if (Platform.OS !== 'web') {
+                        try {
+                          Vibration.vibrate(10);
+                        } catch {}
+                      }
+                      setDeptFilter(dept);
+                    }}
+                    style={({ pressed }) => [
+                      styles.deptFilterPill,
                       {
                         backgroundColor: isSelected
-                          ? 'rgba(255, 255, 255, 0.25)'
+                          ? colors.primary
                           : isDark
-                          ? '#1E293B'
-                          : colors.backgroundElement,
+                          ? '#18202F'
+                          : colors.card,
+                        borderColor: isSelected ? colors.primary : colors.border,
+                        opacity: pressed ? 0.8 : 1,
                       },
                     ]}>
+                    {deptConf && (
+                      <View
+                        style={[
+                          styles.deptDot,
+                          { backgroundColor: isSelected ? '#FFFFFF' : deptConf.color },
+                        ]}
+                      />
+                    )}
                     <Text
                       style={[
-                        styles.tabCountText,
+                        styles.deptFilterText,
                         {
-                          color: isSelected ? '#FFFFFF' : colors.textSecondary,
+                          color: isSelected ? '#FFFFFF' : colors.text,
+                          fontWeight: isSelected ? '700' : '600',
+                        },
+                      ]}>
+                      {dept === 'all' ? 'All Teams' : dept}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.deptCountSub,
+                        {
+                          color: isSelected ? 'rgba(255, 255, 255, 0.8)' : colors.textSecondary,
                         },
                       ]}>
                       {count}
                     </Text>
-                  </View>
-                )}
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
 
-      {/* Department Horizontal Pills with Counts */}
-      <View style={styles.deptScrollWrap}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.deptScrollContent}>
-          {DEPARTMENTS.map((dept) => {
-            const isSelected = deptFilter === dept;
-            const count = deptCounts[dept] || 0;
-            const deptConf =
-              dept !== 'all'
-                ? DepartmentColors[dept] || DepartmentColors['General']
-                : null;
-
-            return (
-              <Pressable
-                key={dept}
-                onPress={() => {
-                  if (Platform.OS !== 'web') {
-                    try {
-                      Vibration.vibrate(10);
-                    } catch {}
-                  }
-                  setDeptFilter(dept);
-                }}
-                style={({ pressed }) => [
-                  styles.deptFilterPill,
-                  {
-                    backgroundColor: isSelected
-                      ? colors.primary
-                      : isDark
-                      ? '#18202F'
-                      : colors.card,
-                    borderColor: isSelected ? colors.primary : colors.border,
-                    opacity: pressed ? 0.8 : 1,
-                  },
-                ]}>
-                {deptConf && (
-                  <View
-                    style={[
-                      styles.deptDot,
-                      { backgroundColor: isSelected ? '#FFFFFF' : deptConf.color },
-                    ]}
-                  />
-                )}
-                <Text
-                  style={[
-                    styles.deptFilterText,
-                    {
-                      color: isSelected ? '#FFFFFF' : colors.text,
-                      fontWeight: isSelected ? '700' : '600',
-                    },
-                  ]}>
-                  {dept === 'all' ? 'All Teams' : dept}
-                </Text>
-                <Text
-                  style={[
-                    styles.deptCountSub,
-                    {
-                      color: isSelected ? 'rgba(255, 255, 255, 0.8)' : colors.textSecondary,
-                    },
-                  ]}>
-                  {count}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* Tasks List */}
-      {loading && !refreshing ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Loading tasks...
-          </Text>
-        </View>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-              colors={[colors.primary]}
-            />
-          }>
-          {filteredTasks.length === 0 ? (
+          {/* Tasks List */}
+          {loading && !refreshing ? (
+            <View style={styles.centerContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+                Loading tasks...
+              </Text>
+            </View>
+          ) : filteredTasks.length === 0 ? (
             <View
               style={[
                 styles.emptyStateCard,
@@ -478,7 +488,7 @@ export default function TasksScreen() {
               </Pressable>
             </View>
           ) : (
-            <>
+            <View style={styles.listContent}>
               {/* Urgent & High Priority Group */}
               {urgentGroup.length > 0 && (
                 <View style={styles.sectionWrap}>
@@ -490,15 +500,18 @@ export default function TasksScreen() {
                       </Text>
                     </View>
                   </View>
-                  {urgentGroup.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      onToggleComplete={handleToggleComplete}
-                      onDelete={handleDeleteTask}
-                      onEdit={setEditingTask}
-                    />
-                  ))}
+                  <View style={isDesktop ? styles.desktopCardGrid : undefined}>
+                    {urgentGroup.map((task) => (
+                      <View key={task.id} style={isDesktop ? styles.desktopCardItem : undefined}>
+                        <TaskCard
+                          task={task}
+                          onToggleComplete={handleToggleComplete}
+                          onDelete={handleDeleteTask}
+                          onEdit={setEditingTask}
+                        />
+                      </View>
+                    ))}
+                  </View>
                 </View>
               )}
 
@@ -515,15 +528,18 @@ export default function TasksScreen() {
                       </View>
                     </View>
                   )}
-                  {regularPendingGroup.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      onToggleComplete={handleToggleComplete}
-                      onDelete={handleDeleteTask}
-                      onEdit={setEditingTask}
-                    />
-                  ))}
+                  <View style={isDesktop ? styles.desktopCardGrid : undefined}>
+                    {regularPendingGroup.map((task) => (
+                      <View key={task.id} style={isDesktop ? styles.desktopCardItem : undefined}>
+                        <TaskCard
+                          task={task}
+                          onToggleComplete={handleToggleComplete}
+                          onDelete={handleDeleteTask}
+                          onEdit={setEditingTask}
+                        />
+                      </View>
+                    ))}
+                  </View>
                 </View>
               )}
 
@@ -538,28 +554,36 @@ export default function TasksScreen() {
                       </Text>
                     </View>
                   </View>
-                  {completedGroup.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      onToggleComplete={handleToggleComplete}
-                      onDelete={handleDeleteTask}
-                      onEdit={setEditingTask}
-                    />
-                  ))}
+                  <View style={isDesktop ? styles.desktopCardGrid : undefined}>
+                    {completedGroup.map((task) => (
+                      <View key={task.id} style={isDesktop ? styles.desktopCardItem : undefined}>
+                        <TaskCard
+                          task={task}
+                          onToggleComplete={handleToggleComplete}
+                          onDelete={handleDeleteTask}
+                          onEdit={setEditingTask}
+                        />
+                      </View>
+                    ))}
+                  </View>
                 </View>
               )}
-            </>
+            </View>
           )}
 
-          <View style={{ height: 90 }} />
-        </ScrollView>
-      )}
+          <View style={{ height: isDesktop ? 40 : 90 }} />
+        </View>
+      </ScrollView>
 
       {/* Floating Action Button */}
       <FloatingActionButton
         onPress={() => setQuickAddVisible(true)}
-        bottomOffset={96}
+        bottomOffset={isDesktop ? 32 : 96}
+        style={
+          isDesktop && {
+            right: Math.max(24, (width - 1120) / 2 + 24),
+          }
+        }
       />
 
       {/* Modals */}
@@ -584,6 +608,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  responsiveContainer: {
+    maxWidth: 1120,
+    width: '100%',
+    alignSelf: 'center',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -607,13 +639,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 14,
   },
   headerAddBtnText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  desktopControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    marginVertical: 4,
+  },
+  desktopSearchWrap: {
+    flex: 1,
+  },
+  desktopTabsWrap: {
+    minWidth: 360,
+  },
+  desktopCardGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  desktopCardItem: {
+    width: '49%',
+    flexGrow: 1,
   },
   searchContainer: {
     paddingHorizontal: 16,
@@ -740,6 +794,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 24,
+    marginHorizontal: 16,
     gap: 10,
   },
   emptyTitle: {

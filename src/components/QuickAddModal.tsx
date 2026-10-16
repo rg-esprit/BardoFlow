@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   useColorScheme,
+  useWindowDimensions,
   Vibration,
 } from 'react-native';
 import { SymbolView } from 'expo-symbols';
@@ -55,6 +56,8 @@ export function QuickAddModal({
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const colors = Colors[isDark ? 'dark' : 'light'];
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
 
   const [title, setTitle] = useState('');
   const [department, setDepartment] = useState<Department>(defaultDepartment);
@@ -142,20 +145,21 @@ export function QuickAddModal({
       onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}>
+        style={[styles.overlay, isDesktop && styles.overlayDesktop]}>
         {/* Backdrop press to dismiss */}
         <Pressable style={styles.backdrop} onPress={onClose} />
 
         <View
           style={[
             styles.sheet,
+            isDesktop && styles.sheetDesktop,
             {
               backgroundColor: colors.card,
               borderColor: colors.border,
             },
           ]}>
-          {/* Grabber handle */}
-          <View style={styles.grabberHandle} />
+          {/* Grabber handle only on mobile */}
+          {!isDesktop && <View style={styles.grabberHandle} />}
 
           {/* Header */}
           <View style={styles.header}>
@@ -421,10 +425,16 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
+  overlayDesktop: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
   backdrop: {
     ...StyleSheet.absoluteFill,
   },
   sheet: {
+    width: '100%',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderTopWidth: 1,
@@ -439,6 +449,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 16,
     elevation: 10,
+  },
+  sheetDesktop: {
+    maxWidth: 540,
+    borderRadius: 20,
+    borderBottomWidth: 1,
+    paddingTop: 20,
+    paddingBottom: 24,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 28,
+    elevation: 20,
   },
   grabberHandle: {
     width: 36,

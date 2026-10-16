@@ -6,10 +6,10 @@ import {
   StyleProp,
   Vibration,
   Platform,
-  View,
+  useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
-import { Colors } from '@/constants/theme';
 
 interface FloatingActionButtonProps {
   onPress: () => void;
@@ -20,8 +20,12 @@ interface FloatingActionButtonProps {
 export function FloatingActionButton({
   onPress,
   style,
-  bottomOffset = 96,
+  bottomOffset,
 }: FloatingActionButtonProps) {
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
+
   const handlePress = () => {
     if (Platform.OS !== 'web') {
       try {
@@ -31,13 +35,25 @@ export function FloatingActionButton({
     onPress();
   };
 
+  // On web mobile, the bottom tab bar is fixed at bottom: 0 with height ~50 + insets.bottom.
+  // The FAB should float cleanly 14-16px directly above the tab bar.
+  // On desktop web, it floats near the bottom right (e.g. 32px).
+  // On native (iOS/Android), it uses the standard 96px offset relative to screen bottom.
+  const computedBottom = Platform.select({
+    web: isDesktop
+      ? (bottomOffset ?? 32)
+      : (64 + Math.max(insets.bottom || 0, 8)),
+    default: bottomOffset ?? 96,
+  });
+
   return (
     <Pressable
       onPress={handlePress}
+      hitSlop={8}
       style={({ pressed }) => [
         styles.fab,
         {
-          bottom: bottomOffset,
+          bottom: computedBottom,
           transform: [{ scale: pressed ? 0.92 : 1 }],
         },
         style,
@@ -53,7 +69,15 @@ export function FloatingActionButton({
 
 const styles = StyleSheet.create({
   fab: {
-    position: 'absolute',
+    ...Platform.select({
+      web: {
+        position: 'fixed' as any,
+        cursor: 'pointer' as any,
+      },
+      default: {
+        position: 'absolute',
+      },
+    }),
     right: 20,
     width: 58,
     height: 58,
@@ -66,6 +90,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 10,
     elevation: 8,
-    zIndex: 999,
+    zIndex: 1001,
   },
 });

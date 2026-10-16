@@ -8,10 +8,10 @@ import {
   Pressable,
   ActivityIndicator,
   useColorScheme,
-  Alert,
   TextInput,
   Vibration,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
@@ -33,11 +33,14 @@ import { QuickAddModal } from '@/components/QuickAddModal';
 import { CreateMeetingModal } from '@/components/CreateMeetingModal';
 import { EditTaskModal } from '@/components/EditTaskModal';
 import { FloatingActionButton } from '@/components/FloatingActionButton';
+import { showAlert } from '@/utils/alert';
 
 export default function TodayDashboardScreen() {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const colors = Colors[isDark ? 'dark' : 'light'];
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -102,7 +105,7 @@ export default function TodayDashboardScreen() {
   };
 
   const handleDeleteTask = (task: Task) => {
-    Alert.alert(
+    showAlert(
       'Delete Task',
       `Are you sure you want to delete "${task.title}"?`,
       [
@@ -121,13 +124,13 @@ export default function TodayDashboardScreen() {
   };
 
   const handleDeleteMeeting = (meeting: Meeting) => {
-    Alert.alert(
+    showAlert(
       'Cancel Meeting',
-      `Are you sure you want to delete "${meeting.title}"?`,
+      `Are you sure you want to cancel "${meeting.title}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Cancel Meeting',
           style: 'destructive',
           onPress: async () => {
             setMeetings((prev) => prev.filter((m) => m.id !== meeting.id));
@@ -168,7 +171,7 @@ export default function TodayDashboardScreen() {
       getActivities({ limit: 10 }).then(setActivities).catch(() => {});
     } catch (err) {
       console.error('[Dashboard] Inline add error:', err);
-      Alert.alert('Error', 'Could not create task. Please try again.');
+      showAlert('Error', 'Could not create task. Please try again.');
     } finally {
       setIsInlineAdding(false);
     }
@@ -198,7 +201,6 @@ export default function TodayDashboardScreen() {
   // Spotlight Next Up Meeting (any meeting today or upcoming in the next 24h)
   const spotlightMeeting = useMemo(() => {
     const nowMs = Date.now();
-    // Prioritize meeting on selected date
     const dayMeetings = meetings.filter((m) => {
       if (!m.meeting_date) return false;
       const mDate = new Date(m.meeting_date);
@@ -206,7 +208,6 @@ export default function TodayDashboardScreen() {
     });
 
     if (dayMeetings.length > 0) {
-      // Find one that is ongoing or upcoming
       const upcoming = dayMeetings.find(
         (m) => new Date(m.meeting_date).getTime() >= nowMs - 1000 * 60 * 60
       );
@@ -214,7 +215,6 @@ export default function TodayDashboardScreen() {
       return dayMeetings[0];
     }
 
-    // Otherwise if viewing today, find the next upcoming meeting
     if (isViewingToday) {
       const upcoming = meetings.find(
         (m) => new Date(m.meeting_date).getTime() >= nowMs - 1000 * 60 * 30
@@ -280,6 +280,123 @@ export default function TodayDashboardScreen() {
     );
   }
 
+  // Right sidebar content for desktop
+  const desktopSidebar = (
+    <View style={styles.desktopSidebar}>
+      {/* Quick Action Shortcuts Card */}
+      <View
+        style={[
+          styles.desktopCardBox,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+          },
+        ]}>
+        <Text style={[styles.sidebarCardTitle, { color: colors.text }]}>
+          Quick Actions
+        </Text>
+        <View style={styles.sidebarActionRow}>
+          <Pressable
+            onPress={() => setQuickAddModalVisible(true)}
+            style={({ pressed }) => [
+              styles.sidebarActionBtn,
+              {
+                backgroundColor: colors.primary,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}>
+            <SymbolView
+              name={{ ios: 'plus', android: 'add', web: 'add' }}
+              size={14}
+              tintColor="#FFFFFF"
+            />
+            <Text style={styles.sidebarActionBtnText}>+ New Task</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setMeetingModalVisible(true)}
+            style={({ pressed }) => [
+              styles.sidebarActionBtn,
+              {
+                backgroundColor: isDark ? '#1E293B' : colors.primaryLight,
+                borderColor: colors.primary,
+                borderWidth: 1,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}>
+            <SymbolView
+              name={{ ios: 'calendar.badge.plus', android: 'event', web: 'event' }}
+              size={14}
+              tintColor={colors.primary}
+            />
+            <Text style={[styles.sidebarActionBtnText, { color: colors.primary }]}>
+              + Meeting
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Spotlight Next Up Meeting */}
+      {spotlightMeeting && (
+        <View style={{ marginBottom: 12 }}>
+          <Text style={[styles.sidebarSectionLabel, { color: colors.textSecondary }]}>
+            SPOTLIGHT MEETING
+          </Text>
+          <MeetingCard
+            meeting={spotlightMeeting}
+            spotlight
+            onDelete={handleDeleteMeeting}
+          />
+        </View>
+      )}
+
+      {/* Selected Day's Meetings */}
+      <View
+        style={[
+          styles.desktopCardBox,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+          },
+        ]}>
+        <View style={styles.sidebarHeaderRow}>
+          <Text style={[styles.sidebarCardTitle, { color: colors.text }]}>
+            {selectedDayLabel}'s Meetings ({selectedDayMeetings.length})
+          </Text>
+          <Pressable
+            hitSlop={8}
+            onPress={() => setMeetingModalVisible(true)}
+            style={styles.textActionLink}>
+            <Text style={[styles.textActionLinkText, { color: colors.primary }]}>
+              + Schedule
+            </Text>
+          </Pressable>
+        </View>
+
+        {selectedDayMeetings.length === 0 ? (
+          <View style={styles.emptyMeetingsBox}>
+            <SymbolView
+              name={{ ios: 'calendar', android: 'event', web: 'event' }}
+              size={24}
+              tintColor={colors.textSecondary}
+            />
+            <Text style={[styles.emptyMeetingsText, { color: colors.textSecondary }]}>
+              No meetings scheduled for {selectedDayLabel.toLowerCase()}.
+            </Text>
+          </View>
+        ) : (
+          selectedDayMeetings.map((m) => (
+            <MeetingCard
+              key={m.id}
+              meeting={m}
+              onDelete={handleDeleteMeeting}
+            />
+          ))
+        )}
+      </View>
+    </View>
+  );
+
   return (
     <SafeAreaView
       edges={['top', 'left', 'right']}
@@ -295,218 +412,237 @@ export default function TodayDashboardScreen() {
             colors={[colors.primary]}
           />
         }>
-        {/* Daily Focus Header with Time-Aware Greeting & Momentum Progress */}
-        <DailyFocusHeader
-          completedCount={completedTodayCount}
-          totalCount={todayTasks.length}
-          urgentCount={urgentTodayCount}
-          selectedDate={selectedDate}
-        />
+        {/* Responsive Content Container */}
+        <View style={styles.responsiveContainer}>
+          {/* Daily Focus Header */}
+          <DailyFocusHeader
+            completedCount={completedTodayCount}
+            totalCount={todayTasks.length}
+            urgentCount={urgentTodayCount}
+            selectedDate={selectedDate}
+          />
 
-        {/* Interactive 7-Day Week Strip */}
-        <WeekStrip
-          selectedDate={selectedDate}
-          onSelectDate={setSelectedDate}
-          tasks={tasks}
-          meetings={meetings}
-          onResetToday={() => setSelectedDate(new Date())}
-        />
+          {/* Interactive 7-Day Week Strip */}
+          <WeekStrip
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+            tasks={tasks}
+            meetings={meetings}
+            onResetToday={() => setSelectedDate(new Date())}
+          />
 
-        {/* Next Up Meeting Spotlight Card (if any meeting today/selected date) */}
-        {spotlightMeeting && (
-          <View style={styles.sectionWrap}>
-            <MeetingCard
-              meeting={spotlightMeeting}
-              spotlight
-              onDelete={handleDeleteMeeting}
-            />
-          </View>
-        )}
-
-        {/* Inline Quick Task Bar */}
-        <View style={styles.sectionWrap}>
-          <View
-            style={[
-              styles.inlineAddBox,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-              },
-            ]}>
-            <SymbolView
-              name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
-              size={18}
-              tintColor={colors.primary}
-            />
-            <TextInput
-              placeholder={`Quick add task for ${selectedDayLabel}...`}
-              placeholderTextColor={colors.textSecondary}
-              value={inlineTaskTitle}
-              onChangeText={setInlineTaskTitle}
-              onSubmitEditing={handleInlineAdd}
-              returnKeyType="done"
-              style={[styles.inlineInput, { color: colors.text }]}
-            />
-            {inlineTaskTitle.trim().length > 0 && (
-              <Pressable
-                onPress={handleInlineAdd}
-                disabled={isInlineAdding}
-                style={({ pressed }) => [
-                  styles.inlineAddBtn,
-                  {
-                    backgroundColor: colors.primary,
-                    opacity: pressed ? 0.8 : 1,
-                  },
-                ]}>
-                {isInlineAdding ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <SymbolView
-                    name={{ ios: 'arrow.up', android: 'arrow_upward', web: 'arrow_upward' }}
-                    size={12}
-                    tintColor="#FFFFFF"
+          {/* Main Desktop Grid or Mobile Stream */}
+          <View style={isDesktop ? styles.desktopGrid : styles.mobileStream}>
+            {/* Left Column (Primary Tasks & Inline Input) */}
+            <View style={isDesktop ? styles.desktopMainCol : styles.mobileMainCol}>
+              {/* Spotlight Meeting Card on Mobile */}
+              {!isDesktop && spotlightMeeting && (
+                <View style={styles.sectionWrap}>
+                  <MeetingCard
+                    meeting={spotlightMeeting}
+                    spotlight
+                    onDelete={handleDeleteMeeting}
                   />
+                </View>
+              )}
+
+              {/* Inline Quick Task Bar */}
+              <View style={styles.sectionWrap}>
+                <View
+                  style={[
+                    styles.inlineAddBox,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
+                  ]}>
+                  <SymbolView
+                    name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
+                    size={18}
+                    tintColor={colors.primary}
+                  />
+                  <TextInput
+                    placeholder={`Quick add task for ${selectedDayLabel}...`}
+                    placeholderTextColor={colors.textSecondary}
+                    value={inlineTaskTitle}
+                    onChangeText={setInlineTaskTitle}
+                    onSubmitEditing={handleInlineAdd}
+                    returnKeyType="done"
+                    style={[styles.inlineInput, { color: colors.text }]}
+                  />
+                  {inlineTaskTitle.trim().length > 0 && (
+                    <Pressable
+                      onPress={handleInlineAdd}
+                      disabled={isInlineAdding}
+                      style={({ pressed }) => [
+                        styles.inlineAddBtn,
+                        {
+                          backgroundColor: colors.primary,
+                          opacity: pressed ? 0.8 : 1,
+                        },
+                      ]}>
+                      {isInlineAdding ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <SymbolView
+                          name={{ ios: 'arrow.up', android: 'arrow_upward', web: 'arrow_upward' }}
+                          size={12}
+                          tintColor="#FFFFFF"
+                        />
+                      )}
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+
+              {/* Selected Date Context Header */}
+              <View style={styles.agendaHeaderRow}>
+                <View style={styles.agendaTitleRow}>
+                  <Text style={[styles.agendaTitle, { color: colors.text }]}>
+                    {selectedDayLabel}'s Agenda
+                  </Text>
+                  <View
+                    style={[
+                      styles.countBadge,
+                      {
+                        backgroundColor: isDark ? 'rgba(3, 126, 243, 0.2)' : colors.primaryLight,
+                      },
+                    ]}>
+                    <Text style={[styles.countBadgeText, { color: colors.primary }]}>
+                      {selectedDayTasks.length + selectedDayMeetings.length}
+                    </Text>
+                  </View>
+                </View>
+
+                {!isDesktop && (
+                  <View style={styles.actionShortcuts}>
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => setMeetingModalVisible(true)}
+                      style={({ pressed }) => [
+                        styles.shortcutPill,
+                        {
+                          backgroundColor: isDark ? '#1E293B' : colors.backgroundElement,
+                          borderColor: colors.border,
+                          opacity: pressed ? 0.7 : 1,
+                        },
+                      ]}>
+                      <SymbolView
+                        name={{ ios: 'calendar.badge.plus', android: 'event', web: 'event' }}
+                        size={12}
+                        tintColor={colors.primary}
+                      />
+                      <Text style={[styles.shortcutText, { color: colors.textSecondary }]}>
+                        + Meeting
+                      </Text>
+                    </Pressable>
+                  </View>
                 )}
-              </Pressable>
-            )}
-          </View>
-        </View>
-
-        {/* Selected Date Context Header */}
-        <View style={styles.agendaHeaderRow}>
-          <View style={styles.agendaTitleRow}>
-            <Text style={[styles.agendaTitle, { color: colors.text }]}>
-              {selectedDayLabel}'s Agenda
-            </Text>
-            <View
-              style={[
-                styles.countBadge,
-                {
-                  backgroundColor: isDark ? 'rgba(3, 126, 243, 0.2)' : colors.primaryLight,
-                },
-              ]}>
-              <Text style={[styles.countBadgeText, { color: colors.primary }]}>
-                {selectedDayTasks.length + selectedDayMeetings.length}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.actionShortcuts}>
-            <Pressable
-              hitSlop={8}
-              onPress={() => setMeetingModalVisible(true)}
-              style={({ pressed }) => [
-                styles.shortcutPill,
-                {
-                  backgroundColor: isDark ? '#1E293B' : colors.backgroundElement,
-                  borderColor: colors.border,
-                  opacity: pressed ? 0.7 : 1,
-                },
-              ]}>
-              <SymbolView
-                name={{ ios: 'calendar.badge.plus', android: 'event', web: 'event' }}
-                size={12}
-                tintColor={colors.primary}
-              />
-              <Text style={[styles.shortcutText, { color: colors.textSecondary }]}>
-                + Meeting
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Overdue Items Banner (if viewing today & has overdue) */}
-        {overdueTasks.length > 0 && (
-          <View style={styles.sectionWrap}>
-            <View style={styles.groupHeader}>
-              <View style={styles.groupHeaderLeft}>
-                <View style={[styles.statusDot, { backgroundColor: colors.urgent }]} />
-                <Text style={[styles.groupTitle, { color: colors.urgent }]}>
-                  Overdue Action Items ({overdueTasks.length})
-                </Text>
               </View>
+
+              {/* Overdue Items Banner */}
+              {overdueTasks.length > 0 && (
+                <View style={styles.sectionWrap}>
+                  <View style={styles.groupHeader}>
+                    <View style={styles.groupHeaderLeft}>
+                      <View style={[styles.statusDot, { backgroundColor: colors.urgent }]} />
+                      <Text style={[styles.groupTitle, { color: colors.urgent }]}>
+                        Overdue Action Items ({overdueTasks.length})
+                      </Text>
+                    </View>
+                  </View>
+
+                  {overdueTasks.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      onToggleComplete={handleToggleTask}
+                      onDelete={handleDeleteTask}
+                      onEdit={setEditingTask}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {/* Pending Tasks for Selected Day */}
+              <View style={styles.sectionWrap}>
+                {selectedDayTasks.length === 0 && selectedDayMeetings.length === 0 && (
+                  <View
+                    style={[
+                      styles.emptyDayCard,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                      },
+                    ]}>
+                    <SymbolView
+                      name={{ ios: 'checkmark.circle.fill', android: 'task_alt', web: 'task_alt' }}
+                      size={34}
+                      tintColor={colors.primary}
+                    />
+                    <Text style={[styles.emptyDayTitle, { color: colors.text }]}>
+                      No pending items for {selectedDayLabel}
+                    </Text>
+                    <Text style={[styles.emptyDaySubtitle, { color: colors.textSecondary }]}>
+                      Use the quick add bar above or tap + to plan ahead.
+                    </Text>
+                  </View>
+                )}
+
+                {selectedDayTasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onToggleComplete={handleToggleTask}
+                    onDelete={handleDeleteTask}
+                    onEdit={setEditingTask}
+                  />
+                ))}
+              </View>
+
+              {/* Completed Tasks section */}
+              {selectedDayCompletedTasks.length > 0 && (
+                <View style={styles.sectionWrap}>
+                  <View style={styles.groupHeader}>
+                    <View style={styles.groupHeaderLeft}>
+                      <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
+                      <Text style={[styles.groupTitle, { color: colors.textSecondary }]}>
+                        Completed ({selectedDayCompletedTasks.length})
+                      </Text>
+                    </View>
+                  </View>
+
+                  {selectedDayCompletedTasks.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      onToggleComplete={handleToggleTask}
+                      onDelete={handleDeleteTask}
+                      onEdit={setEditingTask}
+                    />
+                  ))}
+                </View>
+              )}
             </View>
 
-            {overdueTasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onToggleComplete={handleToggleTask}
-                onDelete={handleDeleteTask}
-                onEdit={setEditingTask}
-              />
-            ))}
+            {/* Right Column for Desktop */}
+            {isDesktop && desktopSidebar}
           </View>
-        )}
-
-        {/* Pending Tasks for Selected Day */}
-        <View style={styles.sectionWrap}>
-          {selectedDayTasks.length === 0 && selectedDayMeetings.length === 0 && (
-            <View
-              style={[
-                styles.emptyDayCard,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                },
-              ]}>
-              <SymbolView
-                name={{ ios: 'checkmark.circle.fill', android: 'task_alt', web: 'task_alt' }}
-                size={34}
-                tintColor={colors.primary}
-              />
-              <Text style={[styles.emptyDayTitle, { color: colors.text }]}>
-                No pending items for {selectedDayLabel}
-              </Text>
-              <Text style={[styles.emptyDaySubtitle, { color: colors.textSecondary }]}>
-                Use the quick add bar above or tap + to plan ahead.
-              </Text>
-            </View>
-          )}
-
-          {selectedDayTasks.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onToggleComplete={handleToggleTask}
-              onDelete={handleDeleteTask}
-              onEdit={setEditingTask}
-            />
-          ))}
         </View>
 
-        {/* Completed Tasks section */}
-        {selectedDayCompletedTasks.length > 0 && (
-          <View style={styles.sectionWrap}>
-            <View style={styles.groupHeader}>
-              <View style={styles.groupHeaderLeft}>
-                <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
-                <Text style={[styles.groupTitle, { color: colors.textSecondary }]}>
-                  Completed ({selectedDayCompletedTasks.length})
-                </Text>
-              </View>
-            </View>
-
-            {selectedDayCompletedTasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onToggleComplete={handleToggleTask}
-                onDelete={handleDeleteTask}
-                onEdit={setEditingTask}
-              />
-            ))}
-          </View>
-        )}
-
-        {/* Bottom padding so floating button doesn't cover content */}
-        <View style={{ height: 90 }} />
+        {/* Bottom padding so floating button / dock doesn't cover content */}
+        <View style={{ height: isDesktop ? 40 : 90 }} />
       </ScrollView>
 
-      {/* Floating Action Button for rapid task creation */}
+      {/* Floating Action Button */}
       <FloatingActionButton
         onPress={() => setQuickAddModalVisible(true)}
-        bottomOffset={96}
+        bottomOffset={isDesktop ? 32 : 96}
+        style={
+          isDesktop && {
+            right: Math.max(24, (width - 1120) / 2 + 24),
+          }
+        }
       />
 
       {/* Modals */}
@@ -550,6 +686,96 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 20,
+  },
+  responsiveContainer: {
+    maxWidth: 1120,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  desktopGrid: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 20,
+    paddingHorizontal: 16,
+    marginTop: 8,
+  },
+  mobileStream: {
+    width: '100%',
+  },
+  desktopMainCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  mobileMainCol: {
+    width: '100%',
+  },
+  desktopSidebar: {
+    width: 360,
+    flexShrink: 0,
+    gap: 16,
+  },
+  desktopCardBox: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sidebarCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+    marginBottom: 10,
+  },
+  sidebarSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    marginBottom: 6,
+    paddingHorizontal: 4,
+  },
+  sidebarHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  textActionLink: {
+    padding: 4,
+  },
+  textActionLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  sidebarActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  sidebarActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  sidebarActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  emptyMeetingsBox: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    gap: 6,
+  },
+  emptyMeetingsText: {
+    fontSize: 12.5,
+    textAlign: 'center',
   },
   sectionWrap: {
     paddingHorizontal: 16,

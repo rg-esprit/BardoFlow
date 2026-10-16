@@ -233,7 +233,7 @@ export function TaskCard({
           </Text>
 
           {/* Description snippet if present */}
-          {task.description && !isCompleted && (
+          {Boolean(task.description) && !isCompleted && (
             <Text
               numberOfLines={2}
               style={[styles.description, { color: colors.textSecondary }]}>
@@ -294,7 +294,7 @@ export function TaskCard({
               </View>
             )}
 
-            {task.assignee_name && (
+            {Boolean(task.assignee_name) && (
               <View style={styles.assigneeContainer}>
                 <View
                   style={[

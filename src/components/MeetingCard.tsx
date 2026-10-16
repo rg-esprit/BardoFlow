@@ -5,7 +5,6 @@ import {
   View,
   Pressable,
   Linking,
-  Alert,
   useColorScheme,
   StyleProp,
   ViewStyle,
@@ -15,6 +14,7 @@ import {
 import { SymbolView } from 'expo-symbols';
 import { Meeting, MeetingType } from '@/types/database';
 import { Colors } from '@/constants/theme';
+import { showAlert } from '@/utils/alert';
 
 interface MeetingCardProps {
   meeting: Meeting;
@@ -130,7 +130,7 @@ export function MeetingCard({
     }
 
     if (!meeting.link) {
-      Alert.alert(
+      showAlert(
         'No Meeting Link',
         'This meeting does not have a virtual link attached.'
       );
@@ -143,7 +143,7 @@ export function MeetingCard({
     if (canOpen) {
       await Linking.openURL(url);
     } else {
-      Alert.alert('Unable to open link', `Could not open: ${url}`);
+      showAlert('Unable to open link', `Could not open: ${url}`);
     }
   };
 
@@ -335,7 +335,7 @@ export function MeetingCard({
             </Text>
           </View>
 
-          {countdownText && (
+          {Boolean(countdownText) && (
             <View
               style={[
                 styles.countdownPill,

@@ -2,7 +2,28 @@ import { Activity, ActivityFilter, ActivityType } from '@/types/database';
 import { INITIAL_ACTIVITIES } from './mock-data';
 import { supabase } from './supabase';
 
-let fallbackActivities: Activity[] = [];
+function loadLocalActivities(): Activity[] {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const stored = window.localStorage.getItem('bardoflow_activities');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+  }
+  return [...INITIAL_ACTIVITIES];
+}
+
+function saveLocalActivities(activities: Activity[]): void {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem('bardoflow_activities', JSON.stringify(activities));
+    } catch {}
+  }
+}
+
+let fallbackActivities: Activity[] = loadLocalActivities();
 
 function generateId(): string {
   return 'act-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 8);
@@ -96,11 +117,13 @@ export async function logActivity(
         created_at: new Date().toISOString(),
       };
       fallbackActivities = [fallbackItem, ...fallbackActivities];
+      saveLocalActivities(fallbackActivities);
       return fallbackItem;
     }
 
     const created = data as Activity;
     fallbackActivities = [created, ...fallbackActivities.filter((a) => a.id !== created.id)];
+    saveLocalActivities(fallbackActivities);
     return created;
   } catch (err) {
     console.warn('[ActivityService] Network error during logActivity, saving locally:', err);
@@ -112,6 +135,7 @@ export async function logActivity(
       created_at: new Date().toISOString(),
     };
     fallbackActivities = [fallbackItem, ...fallbackActivities];
+    saveLocalActivities(fallbackActivities);
     return fallbackItem;
   }
 }

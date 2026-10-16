@@ -3,7 +3,28 @@ import { logActivity } from './activity-service';
 import { INITIAL_TASKS } from './mock-data';
 import { supabase } from './supabase';
 
-let fallbackTasks: Task[] = [];
+function loadLocalTasks(): Task[] {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const stored = window.localStorage.getItem('bardoflow_tasks');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+  }
+  return [...INITIAL_TASKS];
+}
+
+function saveLocalTasks(tasks: Task[]): void {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem('bardoflow_tasks', JSON.stringify(tasks));
+    } catch {}
+  }
+}
+
+let fallbackTasks: Task[] = loadLocalTasks();
 
 function generateId(): string {
   return 'tsk-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 8);
@@ -174,6 +195,7 @@ export async function createTask(task: NewTaskInput): Promise<Task> {
         updated_at: nowStr,
       };
       fallbackTasks = [fallbackTask, ...fallbackTasks];
+      saveLocalTasks(fallbackTasks);
 
       logActivity(
         `Created task: ${fallbackTask.title}`,
@@ -186,6 +208,7 @@ export async function createTask(task: NewTaskInput): Promise<Task> {
 
     const created = data as Task;
     fallbackTasks = [created, ...fallbackTasks.filter((t) => t.id !== created.id)];
+    saveLocalTasks(fallbackTasks);
 
     logActivity(
       `Created task: ${created.title}`,
@@ -204,6 +227,7 @@ export async function createTask(task: NewTaskInput): Promise<Task> {
       updated_at: nowStr,
     };
     fallbackTasks = [fallbackTask, ...fallbackTasks];
+    saveLocalTasks(fallbackTasks);
 
     logActivity(
       `Created task: ${fallbackTask.title}`,
@@ -243,6 +267,7 @@ export async function updateTask(id: string, updates: Partial<Task>): Promise<Ta
           ...updates,
           updated_at: new Date().toISOString(),
         };
+        saveLocalTasks(fallbackTasks);
         return fallbackTasks[index];
       }
       throw new Error(`Task with ID ${id} not found`);
@@ -250,6 +275,7 @@ export async function updateTask(id: string, updates: Partial<Task>): Promise<Ta
 
     const updated = data as Task;
     fallbackTasks = fallbackTasks.map((t) => (t.id === id ? updated : t));
+    saveLocalTasks(fallbackTasks);
     return updated;
   } catch (err) {
     console.warn('[TaskService] Network error during updateTask, updating locally:', err);
@@ -260,6 +286,7 @@ export async function updateTask(id: string, updates: Partial<Task>): Promise<Ta
         ...updates,
         updated_at: new Date().toISOString(),
       };
+      saveLocalTasks(fallbackTasks);
       return fallbackTasks[index];
     }
     throw err;
@@ -296,10 +323,12 @@ export async function deleteTask(id: string): Promise<boolean> {
       console.warn('[TaskService] Supabase deleteTask failed, updating local state:', error.message);
     }
     fallbackTasks = fallbackTasks.filter((t) => t.id !== id);
+    saveLocalTasks(fallbackTasks);
     return true;
   } catch (err) {
     console.warn('[TaskService] Network error during deleteTask, updating local state:', err);
     fallbackTasks = fallbackTasks.filter((t) => t.id !== id);
+    saveLocalTasks(fallbackTasks);
     return true;
   }
 }

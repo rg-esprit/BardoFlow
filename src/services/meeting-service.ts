@@ -3,7 +3,28 @@ import { logActivity } from './activity-service';
 import { INITIAL_MEETINGS } from './mock-data';
 import { supabase } from './supabase';
 
-let fallbackMeetings: Meeting[] = [];
+function loadLocalMeetings(): Meeting[] {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const stored = window.localStorage.getItem('bardoflow_meetings');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+  }
+  return [...INITIAL_MEETINGS];
+}
+
+function saveLocalMeetings(meetings: Meeting[]): void {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem('bardoflow_meetings', JSON.stringify(meetings));
+    } catch {}
+  }
+}
+
+let fallbackMeetings: Meeting[] = loadLocalMeetings();
 
 function generateId(): string {
   return 'mtg-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 8);
@@ -139,6 +160,7 @@ export async function createMeeting(meeting: NewMeetingInput): Promise<Meeting> 
         created_at: new Date().toISOString(),
       };
       fallbackMeetings = [fallbackMeeting, ...fallbackMeetings];
+      saveLocalMeetings(fallbackMeetings);
 
       logActivity(
         `Meeting Scheduled: ${fallbackMeeting.title}`,
@@ -151,6 +173,7 @@ export async function createMeeting(meeting: NewMeetingInput): Promise<Meeting> 
 
     const created = data as Meeting;
     fallbackMeetings = [created, ...fallbackMeetings.filter((m) => m.id !== created.id)];
+    saveLocalMeetings(fallbackMeetings);
 
     logActivity(
       `Meeting Scheduled: ${created.title}`,
@@ -167,6 +190,7 @@ export async function createMeeting(meeting: NewMeetingInput): Promise<Meeting> 
       created_at: new Date().toISOString(),
     };
     fallbackMeetings = [fallbackMeeting, ...fallbackMeetings];
+    saveLocalMeetings(fallbackMeetings);
 
     logActivity(
       `Meeting Scheduled: ${fallbackMeeting.title}`,
@@ -205,6 +229,7 @@ export async function updateMeeting(
           ...fallbackMeetings[index],
           ...updates,
         };
+        saveLocalMeetings(fallbackMeetings);
         return fallbackMeetings[index];
       }
       throw new Error(`Meeting with ID ${id} not found`);
@@ -212,6 +237,7 @@ export async function updateMeeting(
 
     const updated = data as Meeting;
     fallbackMeetings = fallbackMeetings.map((m) => (m.id === id ? updated : m));
+    saveLocalMeetings(fallbackMeetings);
     return updated;
   } catch (err) {
     console.warn('[MeetingService] Network error during updateMeeting, updating locally:', err);
@@ -221,6 +247,7 @@ export async function updateMeeting(
         ...fallbackMeetings[index],
         ...updates,
       };
+      saveLocalMeetings(fallbackMeetings);
       return fallbackMeetings[index];
     }
     throw err;
@@ -237,10 +264,12 @@ export async function deleteMeeting(id: string): Promise<boolean> {
       console.warn('[MeetingService] Supabase deleteMeeting failed, updating local state:', error.message);
     }
     fallbackMeetings = fallbackMeetings.filter((m) => m.id !== id);
+    saveLocalMeetings(fallbackMeetings);
     return true;
   } catch (err) {
     console.warn('[MeetingService] Network error during deleteMeeting, updating local state:', err);
     fallbackMeetings = fallbackMeetings.filter((m) => m.id !== id);
+    saveLocalMeetings(fallbackMeetings);
     return true;
   }
 }

@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   useColorScheme,
+  useWindowDimensions,
 } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { Department, NewTaskInput, TaskPriority } from '@/types/database';
@@ -47,6 +48,8 @@ export function CreateTaskModal({
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const colors = Colors[isDark ? 'dark' : 'light'];
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -135,15 +138,17 @@ export function CreateTaskModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType={isDesktop ? 'fade' : 'slide'}
       transparent
       onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}>
+        style={[styles.overlay, isDesktop && styles.overlayDesktop]}>
+        <Pressable style={styles.backdrop} onPress={onClose} />
         <View
           style={[
             styles.modalContainer,
+            isDesktop && styles.modalContainerDesktop,
             {
               backgroundColor: colors.card,
               borderColor: colors.border,
@@ -409,7 +414,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
     justifyContent: 'flex-end',
   },
+  overlayDesktop: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFill,
+  },
   modalContainer: {
+    width: '100%',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 1,
@@ -417,6 +431,18 @@ const styles = StyleSheet.create({
     maxHeight: '88%',
     paddingTop: 18,
     paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+  },
+  modalContainerDesktop: {
+    maxWidth: 580,
+    borderRadius: 20,
+    borderBottomWidth: 1,
+    maxHeight: '88%',
+    paddingBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 28,
+    elevation: 20,
   },
   header: {
     flexDirection: 'row',

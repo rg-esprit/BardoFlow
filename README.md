@@ -9,8 +9,6 @@
 
 ![BardoFlow Walkthrough](./assets/demo.gif)
 
-> 💡 *Prefer full resolution with sound? [Watch or download the high-res MP4](./assets/demo.mp4).*
-
 ---
 
 ## 📱 Platform Support
@@ -133,9 +131,8 @@ npx tsc --noEmit
 
 ```
 BardoFlow/
-├── assets/                 # Brand assets, icons, and demo preview
-│   ├── demo.mp4            # Showcase video walkthrough
-│   └── preview.jpg         # Video poster frame
+├── assets/                 # Brand assets, icons, and animated demo preview
+│   └── demo.gif            # Looping walkthrough demo
 ├── src/
 │   ├── app/                # Expo Router routes & screens
 │   │   ├── _layout.tsx     # Root theme and safe area providers

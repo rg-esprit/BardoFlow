@@ -7,15 +7,9 @@
 
 ## 🎬 Product Demo
 
-[![BardoFlow Walkthrough](./assets/preview.jpg)](./assets/demo.mp4)
+![BardoFlow Walkthrough](./assets/demo.gif)
 
-> 📹 **[Click here to watch the full walkthrough video](./assets/demo.mp4)**
-
-https://github.com/user-attachments/assets/demo.mp4 (or open [`assets/demo.mp4`](./assets/demo.mp4) locally)
-
-<video src="./assets/demo.mp4" controls="controls" width="100%" height="auto" poster="./assets/preview.jpg">
-  Your browser does not support the video tag. <a href="./assets/demo.mp4">Download and watch demo video</a>.
-</video>
+> 💡 *Prefer full resolution with sound? [Watch or download the high-res MP4](./assets/demo.mp4).*
 
 ---
 

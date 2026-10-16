@@ -7,7 +7,9 @@
 
 ## 🎬 Product Demo
 
-![BardoFlow Walkthrough](./assets/demo.gif)
+[![BardoFlow Walkthrough](https://img.youtube.com/vi/-T-7ZbauQ0w/maxresdefault.jpg)](https://youtu.be/-T-7ZbauQ0w)
+
+> 📹 **[Click to watch the full walkthrough on YouTube](https://youtu.be/-T-7ZbauQ0w)**
 
 ---
 
@@ -131,8 +133,7 @@ npx tsc --noEmit
 
 ```
 BardoFlow/
-├── assets/                 # Brand assets, icons, and animated demo preview
-│   └── demo.gif            # Looping walkthrough demo
+├── assets/                 # Brand assets, app icons, and graphics
 ├── src/
 │   ├── app/                # Expo Router routes & screens
 │   │   ├── _layout.tsx     # Root theme and safe area providers
